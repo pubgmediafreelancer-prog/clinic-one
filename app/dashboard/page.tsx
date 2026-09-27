@@ -24,7 +24,8 @@ export default async function DashboardPage() {
   const { data: doctors } = await supabase
     .from("profiles")
     .select("id, full_name")
-    .eq("role", "doctor");
+    .eq("role", "doctor")
+    .eq("clinic_id", profile.clinic_id);
 
   return (
     <DashboardClient
