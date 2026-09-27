@@ -34,6 +34,12 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(300);
 
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("clinic_id", profile.clinic_id)
+    .order("full_name");
+
   const { data: invoices } = await supabase
     .from("invoices")
     .select("id, amount, paid_amount, status, currency, exchange_rate_used, created_at")
@@ -55,6 +61,7 @@ export default async function DashboardPage() {
       patients={(patients as any) ?? []}
       services={(services as any) ?? []}
       invoices={(invoices as any) ?? []}
+      staff={(staff as any) ?? []}
     />
   );
 }

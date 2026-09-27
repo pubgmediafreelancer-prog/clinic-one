@@ -23,7 +23,7 @@ const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
   { key: "obgyn", label: "النساء والولادة", icon: "🤰" },
 ];
 
-export default function DashboardClient({ profile, appointments, doctors, patients, services, invoices }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[]; invoices: any[] }) {
+export default function DashboardClient({ profile, appointments, doctors, patients, services, invoices, staff }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[]; invoices: any[]; staff: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const clinic = profile.clinics ?? {};
@@ -85,6 +85,14 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setServiceBusyId(id);
     await supabase.from("services").delete().eq("id", id);
     setServiceBusyId(null);
+    router.refresh();
+  }
+
+  const [staffBusyId, setStaffBusyId] = useState<string | null>(null);
+  async function changeStaffRole(id: string, role: string) {
+    setStaffBusyId(id);
+    await supabase.from("profiles").update({ role }).eq("id", id);
+    setStaffBusyId(null);
     router.refresh();
   }
 
@@ -271,7 +279,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     (!apptDoctorFilter || a.doctor_id === apptDoctorFilter) && inRange(a.scheduled_at, apptRangeFilter)
   );
 
-  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "reports" | "invite" | "settings">("overview");
+  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "reports" | "staff" | "invite" | "settings">("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   function setTab(next: typeof tab) {
     setTabRaw(next);
@@ -343,6 +351,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           {profile.role === "admin" && (
             <>
               <button className={`sidebar-link ${tab === "reports" ? "active" : ""}`} onClick={() => setTab("reports")}>📈 التقارير</button>
+              <button className={`sidebar-link ${tab === "staff" ? "active" : ""}`} onClick={() => setTab("staff")}>🧑‍⚕️ الأطباء والموظفون</button>
               <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
               <button className={`sidebar-link ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>⚙️ إعدادات العيادة</button>
             </>
@@ -723,6 +732,31 @@ export default function DashboardClient({ profile, appointments, doctors, patien
               ))}
             </div>
           </>
+        )}
+
+        {tab === "staff" && profile.role === "admin" && (
+          <div className="card">
+            <h2 className="section-title" style={{ marginBottom: 8 }}>الأطباء والموظفون</h2>
+            <p className="subtitle" style={{ marginTop: 0 }}>
+              الأدوار: <strong>الإدارة</strong> (كل الصلاحيات) — <strong>الدكتور</strong> (ملفات المرضى، الاستشارات، الوصفات، التاريخ الطبي) — <strong>السكرتيرة</strong> (المرضى، المواعيد، غرفة الانتظار، الفواتير — بدون تعديل التشخيص الطبي).
+            </p>
+            {staff.length === 0 && <div className="empty-state">لا يوجد موظفون</div>}
+            {staff.map((s) => (
+              <div key={s.id} className="row list-item" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, fontWeight: 600 }}>{s.full_name}{s.id === profile.id ? " (أنت)" : ""}</div>
+                <select
+                  value={s.role}
+                  disabled={staffBusyId === s.id || s.id === profile.id}
+                  onChange={(e) => changeStaffRole(s.id, e.target.value)}
+                  style={{ width: "auto" }}
+                >
+                  <option value="admin">إدارة</option>
+                  <option value="doctor">دكتور</option>
+                  <option value="secretary">سكرتيرة</option>
+                </select>
+              </div>
+            ))}
+          </div>
         )}
 
         {tab === "settings" && profile.role === "admin" && (

@@ -183,6 +183,7 @@ export default function PatientFileClient({
   const isDoctor = profile.role === "doctor";
   const isStaff = profile.role === "admin" || profile.role === "secretary" || isDoctor;
   const isFrontDesk = profile.role === "admin" || profile.role === "secretary";
+  const canEditMedical = isDoctor || profile.role === "admin";
 
   async function addVisit(e: React.FormEvent) {
     e.preventDefault();
@@ -429,7 +430,7 @@ export default function PatientFileClient({
             <div className="card mb-5">
               <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h2 className="section-title" style={{ marginBottom: 0 }}>ملف المريض</h2>
-                {isStaff && !editingProfile && (
+                {canEditMedical && !editingProfile && (
                   <button type="button" className="btn-danger-sm" style={{ background: "var(--brand-50)", color: "var(--brand-700)" }} onClick={() => setEditingProfile(true)}>
                     تعديل الملف
                   </button>
@@ -528,7 +529,7 @@ export default function PatientFileClient({
 
         {tab === "visits" && (
           <>
-            {isStaff && (
+            {canEditMedical && (
               <div className="card mb-5">
                 <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <h2 className="section-title" style={{ marginBottom: showNewVisit ? 12 : 0 }}>استشارة جديدة</h2>
