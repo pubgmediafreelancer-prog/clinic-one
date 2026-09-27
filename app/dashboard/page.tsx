@@ -17,7 +17,7 @@ export default async function DashboardPage() {
 
   const { data: appointments } = await supabase
     .from("appointments")
-    .select("id, scheduled_at, visit_type, status, patient_id, patients(full_name), profiles(full_name)")
+    .select("id, scheduled_at, visit_type, status, patient_id, doctor_id, patients(full_name), profiles(full_name)")
     .order("scheduled_at", { ascending: true })
     .limit(50);
 

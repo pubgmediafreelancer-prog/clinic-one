@@ -114,11 +114,23 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   }
 
   const [apptBusyId, setApptBusyId] = useState<string | null>(null);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [rescheduleValue, setRescheduleValue] = useState("");
 
   async function updateApptStatus(id: string, status: string) {
     setApptBusyId(id);
     await supabase.from("appointments").update({ status }).eq("id", id);
     setApptBusyId(null);
+    router.refresh();
+  }
+
+  async function rescheduleAppt(id: string) {
+    if (!rescheduleValue) return;
+    setApptBusyId(id);
+    await supabase.from("appointments").update({ scheduled_at: new Date(rescheduleValue).toISOString(), status: "scheduled" }).eq("id", id);
+    setApptBusyId(null);
+    setRescheduleId(null);
+    setRescheduleValue("");
     router.refresh();
   }
 
@@ -145,6 +157,28 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   const todayStr = new Date().toDateString();
   const todaysCount = appointments.filter((a) => new Date(a.scheduled_at).toDateString() === todayStr).length;
   const pendingCount = appointments.filter((a) => a.status === "wait" || a.status === "ok").length;
+
+  const [apptDoctorFilter, setApptDoctorFilter] = useState("");
+  const [apptRangeFilter, setApptRangeFilter] = useState<"today" | "week" | "month" | "all">("all");
+
+  function inRange(dateStr: string, range: typeof apptRangeFilter) {
+    if (range === "all") return true;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (range === "today") return d.toDateString() === now.toDateString();
+    if (range === "week") {
+      const diff = (d.getTime() - now.getTime()) / (1000 * 3600 * 24);
+      return diff >= -7 && diff <= 7;
+    }
+    if (range === "month") {
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+    return true;
+  }
+
+  const filteredAppointments = appointments.filter((a) =>
+    (!apptDoctorFilter || a.doctor_id === apptDoctorFilter) && inRange(a.scheduled_at, apptRangeFilter)
+  );
 
   const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "invite" | "settings">("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -354,34 +388,84 @@ export default function DashboardClient({ profile, appointments, doctors, patien
             </div>
 
             <div className="card">
-              <h2 className="section-title" style={{ marginBottom: 8 }}>كل المواعيد</h2>
-              {appointments.length === 0 && <div className="empty-state">لا يوجد مواعيد بعد</div>}
-              {appointments.map((a) => (
-                <div key={a.id} className="list-item row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
-                    <div className="subtitle" style={{ margin: 0 }}>
-                      {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
-                    </div>
-                  </a>
-                  <select
-                    value={a.status}
-                    disabled={apptBusyId === a.id}
-                    onChange={(e) => updateApptStatus(a.id, e.target.value)}
-                    style={{ width: "auto" }}
-                    className={STATUS_BADGE_CLASS[a.status]}
-                  >
-                    {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
+              <div className="row" style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                <h2 className="section-title" style={{ marginBottom: 0 }}>كل المواعيد</h2>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <select value={apptDoctorFilter} onChange={(e) => setApptDoctorFilter(e.target.value)} style={{ width: "auto" }}>
+                    <option value="">كل الأطباء</option>
+                    {doctors.map((d) => (<option key={d.id} value={d.id}>{d.full_name}</option>))}
                   </select>
-                  <button
-                    onClick={() => deleteAppt(a.id)}
-                    disabled={apptBusyId === a.id}
-                    className="btn-danger-sm"
-                  >
-                    حذف
-                  </button>
+                  <select value={apptRangeFilter} onChange={(e) => setApptRangeFilter(e.target.value as any)} style={{ width: "auto" }}>
+                    <option value="all">كل الفترات</option>
+                    <option value="today">اليوم</option>
+                    <option value="week">هذا الأسبوع</option>
+                    <option value="month">هذا الشهر</option>
+                  </select>
+                </div>
+              </div>
+              {filteredAppointments.length === 0 && <div className="empty-state">لا يوجد مواعيد مطابقة</div>}
+              {filteredAppointments.map((a) => (
+                <div key={a.id} className="list-item" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div className="row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
+                      <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
+                      <div className="subtitle" style={{ margin: 0 }}>
+                        {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
+                      </div>
+                    </a>
+                    <span className={`badge ${STATUS_BADGE_CLASS[a.status]}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {a.status === "scheduled" && (
+                      <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "ok")}>✔ تأكيد</button>
+                    )}
+                    {(a.status === "scheduled" || a.status === "ok") && (
+                      <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "wait")}>📥 تسجيل حضور</button>
+                    )}
+                    {a.status === "wait" && (
+                      <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "in_consultation")}>🩺 بدء الاستشارة</button>
+                    )}
+                    {a.status === "in_consultation" && (
+                      <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "completed")}>✅ إنهاء</button>
+                    )}
+                    {!["completed", "cancelled", "no_show"].includes(a.status) && (
+                      <>
+                        <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "no_show")}>🚫 لم يحضر</button>
+                        <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => updateApptStatus(a.id, "cancelled")}>✕ إلغاء</button>
+                        <button className="btn-sm" disabled={apptBusyId === a.id} onClick={() => { setRescheduleId(a.id); setRescheduleValue(""); }}>🔁 إعادة جدولة</button>
+                      </>
+                    )}
+                    <select
+                      value={a.status}
+                      disabled={apptBusyId === a.id}
+                      onChange={(e) => updateApptStatus(a.id, e.target.value)}
+                      style={{ width: "auto" }}
+                      className={STATUS_BADGE_CLASS[a.status]}
+                    >
+                      {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => deleteAppt(a.id)}
+                      disabled={apptBusyId === a.id}
+                      className="btn-danger-sm"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                  {rescheduleId === a.id && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="datetime-local"
+                        value={rescheduleValue}
+                        onChange={(e) => setRescheduleValue(e.target.value)}
+                        style={{ width: "auto" }}
+                      />
+                      <button className="primary" style={{ width: "auto", marginTop: 0 }} disabled={apptBusyId === a.id} onClick={() => rescheduleAppt(a.id)}>حفظ الموعد الجديد</button>
+                      <button className="btn-danger-sm" onClick={() => setRescheduleId(null)}>إلغاء</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
