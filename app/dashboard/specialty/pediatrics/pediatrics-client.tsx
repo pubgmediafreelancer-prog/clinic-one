@@ -4,6 +4,45 @@ import { createClient } from "@/lib/supabase/client";
 
 const VACCINE_STATUS_LABEL: Record<string, string> = { scheduled: "مجدولة", given: "أُعطيت", overdue: "متأخرة" };
 
+function GrowthChart({ data }: { data: any[] }) {
+  const width = 640, height = 220, pad = 36;
+  const ageMonths = data.map((g) => g.age_in_days / 30);
+  const maxAge = Math.max(1, ...ageMonths);
+  const series: { key: string; label: string; color: string }[] = [
+    { key: "weight_kg", label: "الوزن (كغ)", color: "#2563eb" },
+    { key: "height_cm", label: "الطول (سم)", color: "#16a34a" },
+  ];
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto", background: "#fff", borderRadius: 8 }}>
+      <line x1={pad} y1={height - pad} x2={width - 10} y2={height - pad} stroke="#ccc" />
+      <line x1={pad} y1={10} x2={pad} y2={height - pad} stroke="#ccc" />
+      {series.map((s) => {
+        const values = data.map((g) => Number(g[s.key]) || 0).filter((v) => v > 0);
+        if (values.length < 2) return null;
+        const maxVal = Math.max(...data.map((g) => Number(g[s.key]) || 0), 1);
+        const points = data
+          .map((g, i) => {
+            const v = Number(g[s.key]);
+            if (!v) return null;
+            const x = pad + (ageMonths[i] / maxAge) * (width - pad - 20);
+            const y = height - pad - (v / maxVal) * (height - pad - 20);
+            return `${x},${y}`;
+          })
+          .filter(Boolean)
+          .join(" ");
+        return <polyline key={s.key} points={points} fill="none" stroke={s.color} strokeWidth={2} />;
+      })}
+      {series.map((s, i) => (
+        <g key={s.key} transform={`translate(${pad + i * 140}, 14)`}>
+          <rect width={10} height={10} fill={s.color} rx={2} />
+          <text x={16} y={9} fontSize={11} fill="#333">{s.label}</text>
+        </g>
+      ))}
+      <text x={pad} y={height - 8} fontSize={10} fill="#999">العمر (أشهر) →</text>
+    </svg>
+  );
+}
+
 function ageInDays(dob: string | null) {
   if (!dob) return 0;
   return Math.max(0, Math.floor((Date.now() - new Date(dob).getTime()) / 86400000));
@@ -90,14 +129,25 @@ export default function PediatricsClient({ profile, patients }: { profile: any; 
               <button className="primary" style={{ marginTop: 10, width: "auto" }} onClick={addGrowth}>حفظ القياس</button>
             </div>
 
+            {growth.length > 1 && (
+              <div className="card mb-5">
+                <h2 className="section-title" style={{ marginBottom: 8 }}>منحنى النمو (Growth Chart)</h2>
+                <GrowthChart data={[...growth].reverse()} />
+              </div>
+            )}
+
             <div className="card mb-5">
               <h2 className="section-title" style={{ marginBottom: 8 }}>سجل النمو</h2>
               {growth.length === 0 && <div className="empty-state">لا يوجد قياسات بعد</div>}
-              {growth.map((g) => (
-                <div key={g.id} className="list-item subtitle" style={{ margin: 0 }}>
-                  عمر {Math.floor(g.age_in_days / 30)} شهر — الوزن {g.weight_kg ?? "—"} كغ — الطول {g.height_cm ?? "—"} سم — محيط الرأس {g.head_circum_cm ?? "—"} سم
-                </div>
-              ))}
+              {growth.map((g) => {
+                const bmi = g.weight_kg && g.height_cm ? (Number(g.weight_kg) / Math.pow(Number(g.height_cm) / 100, 2)) : null;
+                return (
+                  <div key={g.id} className="list-item subtitle" style={{ margin: 0 }}>
+                    عمر {Math.floor(g.age_in_days / 30)} شهر — الوزن {g.weight_kg ?? "—"} كغ — الطول {g.height_cm ?? "—"} سم — محيط الرأس {g.head_circum_cm ?? "—"} سم
+                    {bmi ? ` — BMI ${bmi.toFixed(1)}` : ""}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="card mb-5">
