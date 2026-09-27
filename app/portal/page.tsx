@@ -19,7 +19,10 @@ export default function PortalLogin() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOtp({ phone });
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+      options: { data: { signup_type: "patient" } },
+    });
     setLoading(false);
     if (error) { setError(error.message); return; }
     setStep("otp");
