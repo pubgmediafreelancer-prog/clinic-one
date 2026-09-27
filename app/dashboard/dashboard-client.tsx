@@ -73,6 +73,23 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     router.refresh();
   }
 
+  const [apptBusyId, setApptBusyId] = useState<string | null>(null);
+
+  async function updateApptStatus(id: string, status: string) {
+    setApptBusyId(id);
+    await supabase.from("appointments").update({ status }).eq("id", id);
+    setApptBusyId(null);
+    router.refresh();
+  }
+
+  async function deleteAppt(id: string) {
+    if (!confirm("حذف هذا الموعد؟")) return;
+    setApptBusyId(id);
+    await supabase.from("appointments").delete().eq("id", id);
+    setApptBusyId(null);
+    router.refresh();
+  }
+
   async function createInvite() {
     setInviteError(null);
     const code = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -149,15 +166,32 @@ export default function DashboardClient({ profile, appointments, doctors, patien
         <h1 style={{ fontSize: "1.1rem" }}>المواعيد</h1>
         {appointments.length === 0 && <p className="subtitle">لا يوجد مواعيد بعد</p>}
         {appointments.map((a) => (
-          <a key={a.id} href={`/dashboard/patients/${a.patient_id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
-            <div>
+          <div key={a.id} className="list-item row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
               <div>{a.patients?.full_name}</div>
               <div className="subtitle" style={{ margin: 0 }}>
                 {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
               </div>
-            </div>
-            <span className="badge">{STATUS_LABEL[a.status] ?? a.status}</span>
-          </a>
+            </a>
+            <select
+              value={a.status}
+              disabled={apptBusyId === a.id}
+              onChange={(e) => updateApptStatus(a.id, e.target.value)}
+              style={{ width: "auto" }}
+            >
+              {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => deleteAppt(a.id)}
+              disabled={apptBusyId === a.id}
+              className="link"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}
+            >
+              حذف
+            </button>
+          </div>
         ))}
       </div>
 

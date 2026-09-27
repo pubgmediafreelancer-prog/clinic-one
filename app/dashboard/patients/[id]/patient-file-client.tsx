@@ -25,6 +25,10 @@ export default function PatientFileClient({
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
 
+  const [payAmount, setPayAmount] = useState<Record<string, string>>({});
+  const [invoiceBusyId, setInvoiceBusyId] = useState<string | null>(null);
+  const [payError, setPayError] = useState<Record<string, string>>({});
+
   const isDoctor = profile.role === "doctor";
   const isStaff = profile.role === "admin" || profile.role === "secretary" || isDoctor;
 
@@ -76,6 +80,36 @@ export default function PatientFileClient({
     setInvoiceLoading(false);
     if (error) { setInvoiceError(error.message); return; }
     setInvoiceForm({ amount: "" });
+    router.refresh();
+  }
+
+  async function recordPayment(inv: any) {
+    const raw = payAmount[inv.id];
+    const amt = Number(raw);
+    setPayError({ ...payError, [inv.id]: "" });
+    if (!raw || isNaN(amt) || amt <= 0) {
+      setPayError({ ...payError, [inv.id]: "أدخل مبلغ صحيح" });
+      return;
+    }
+    setInvoiceBusyId(inv.id);
+    const total = Number(inv.amount);
+    const newPaid = Math.min(Number(inv.paid_amount) + amt, total);
+    const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+    const { error } = await supabase
+      .from("invoices")
+      .update({ paid_amount: newPaid, status: newStatus })
+      .eq("id", inv.id);
+    setInvoiceBusyId(null);
+    if (error) { setPayError({ ...payError, [inv.id]: error.message }); return; }
+    setPayAmount({ ...payAmount, [inv.id]: "" });
+    router.refresh();
+  }
+
+  async function deleteInvoice(id: string) {
+    if (!confirm("حذف هذه الفاتورة؟")) return;
+    setInvoiceBusyId(id);
+    await supabase.from("invoices").delete().eq("id", id);
+    setInvoiceBusyId(null);
     router.refresh();
   }
 
@@ -172,9 +206,44 @@ export default function PatientFileClient({
         <h1 style={{ fontSize: "1.1rem" }}>الفواتير</h1>
         {invoices.length === 0 && <p className="subtitle">لا يوجد فواتير بعد</p>}
         {invoices.map((i) => (
-          <div key={i.id} className="row list-item">
-            <div>${Number(i.amount).toFixed(2)}</div>
-            <span className="badge">{INVOICE_STATUS_LABEL[i.status] ?? i.status}</span>
+          <div key={i.id} className="list-item">
+            <div className="row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                ${Number(i.amount).toFixed(2)} — مدفوع ${Number(i.paid_amount).toFixed(2)}
+              </div>
+              <span className="badge">{INVOICE_STATUS_LABEL[i.status] ?? i.status}</span>
+              {(profile.role === "admin" || profile.role === "secretary") && (
+                <button
+                  onClick={() => deleteInvoice(i.id)}
+                  disabled={invoiceBusyId === i.id}
+                  className="link"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}
+                >
+                  حذف
+                </button>
+              )}
+            </div>
+            {(profile.role === "admin" || profile.role === "secretary") && i.status !== "paid" && (
+              <div className="row" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="مبلغ الدفعة"
+                  value={payAmount[i.id] ?? ""}
+                  onChange={(e) => setPayAmount({ ...payAmount, [i.id]: e.target.value })}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  onClick={() => recordPayment(i)}
+                  disabled={invoiceBusyId === i.id}
+                  className="primary"
+                >
+                  {invoiceBusyId === i.id ? "..." : "تسجيل دفعة"}
+                </button>
+              </div>
+            )}
+            {payError[i.id] && <p className="error" style={{ marginTop: 4 }}>{payError[i.id]}</p>}
           </div>
         ))}
       </div>
