@@ -40,24 +40,42 @@ export default function InviteSignupPage() {
   }
 
   return (
-    <main className="page">
-      <div className="card">
-        <h1>إتمام التسجيل</h1>
-        <p className="subtitle">دعوة انضمام لعيادة — كود: {code}</p>
-        <form onSubmit={handleSubmit}>
-          <label>اسمك الكامل</label>
-          <input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+    <div className="auth-shell">
+      <aside className="auth-brand">
+        <div className="auth-brand-mark">
+          <span className="auth-brand-logo">🩺</span>
+          كلينك ون
+        </div>
+        <div>
+          <div className="auth-brand-headline">دعوة انضمام لفريق العيادة</div>
+          <p className="auth-brand-sub" style={{ marginTop: 16 }}>
+            صار عندك حساب مرتبط بعيادتك ودورك، جاهز فوراً بعد التسجيل.
+          </p>
+        </div>
+        <div />
+      </aside>
+      <div className="auth-panel">
+        <div className="auth-form-wrap">
+          <div className="card">
+            <div className="eyebrow">كود الدعوة: {code}</div>
+            <h1>إتمام التسجيل</h1>
+            <p className="subtitle">أنشئ حسابك للانضمام إلى فريق العيادة</p>
+            <form onSubmit={handleSubmit}>
+              <label>اسمك الكامل</label>
+              <input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
 
-          <label>البريد الإلكتروني</label>
-          <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <label>البريد الإلكتروني</label>
+              <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
 
-          <label>كلمة المرور</label>
-          <input required type="password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <label>كلمة المرور</label>
+              <input required type="password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
 
-          {error && <p className="error">{error}</p>}
-          <button className="primary" disabled={loading}>{loading ? "..." : "انضمام للعيادة"}</button>
-        </form>
+              {error && <p className="error">{error}</p>}
+              <button className="primary" disabled={loading}>{loading ? "..." : "انضمام للعيادة"}</button>
+            </form>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 const INVOICE_STATUS_LABEL: Record<string, string> = {
   unpaid: "غير مدفوعة", partial: "مدفوعة جزئياً", paid: "مدفوعة",
 };
+const INVOICE_STATUS_CLASS: Record<string, string> = {
+  unpaid: "badge-danger", partial: "badge-warn", paid: "badge-success",
+};
 
 export default function PatientFileClient({
   profile, patient, visits, reports, invoices,
@@ -113,140 +116,172 @@ export default function PatientFileClient({
     router.refresh();
   }
 
+  const totalDue = invoices.reduce((s, i) => s + (Number(i.amount) - Number(i.paid_amount)), 0);
+
   return (
-    <main className="page" style={{ maxWidth: 640 }}>
-      <div className="row">
-        <div>
-          <h1>{patient.full_name}</h1>
-          <p className="subtitle">
-            {patient.phone}
-            {patient.blood_type ? ` — فصيلة الدم: ${patient.blood_type}` : ""}
-          </p>
-        </div>
-        <a href="/dashboard" className="link">رجوع للداشبورد</a>
-      </div>
-
-      {patient.allergies && (
-        <p className="subtitle" style={{ marginTop: -12 }}>حساسية: {patient.allergies}</p>
-      )}
-
-      {isStaff && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: "1.1rem" }}>إضافة زيارة</h1>
-          <form onSubmit={addVisit}>
-            <label>التشخيص</label>
-            <input value={visitForm.diagnosis} onChange={(e) => setVisitForm({ ...visitForm, diagnosis: e.target.value })} />
-            <label>ملاحظات</label>
-            <input value={visitForm.notes} onChange={(e) => setVisitForm({ ...visitForm, notes: e.target.value })} />
-            {visitError && <p className="error">{visitError}</p>}
-            <button className="primary" disabled={visitLoading}>{visitLoading ? "..." : "حفظ الزيارة"}</button>
-          </form>
-        </div>
-      )}
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: "1.1rem" }}>الزيارات</h1>
-        {visits.length === 0 && <p className="subtitle">لا يوجد زيارات بعد</p>}
-        {visits.map((v) => (
-          <div key={v.id} className="list-item">
-            <div className="subtitle" style={{ margin: 0 }}>
-              {new Date(v.visited_at).toLocaleString("ar-LB")} — د. {v.profiles?.full_name ?? "—"}
+    <div className="app-shell">
+      <main className="app-main" style={{ maxWidth: 780 }}>
+        <div className="row page-head">
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: "50%",
+              background: "linear-gradient(135deg, var(--brand-500), var(--brand-700))",
+              color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.3rem", flexShrink: 0,
+            }}>
+              {patient.full_name?.trim()?.[0] ?? "؟"}
             </div>
-            {v.diagnosis && <div>{v.diagnosis}</div>}
-            {v.notes && <div className="subtitle" style={{ margin: 0 }}>{v.notes}</div>}
-          </div>
-        ))}
-      </div>
-
-      {isStaff && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: "1.1rem" }}>إضافة تقرير</h1>
-          <form onSubmit={addReport}>
-            <label>عنوان التقرير</label>
-            <input required value={reportForm.title} onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })} />
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
-              <input
-                type="checkbox"
-                style={{ width: "auto" }}
-                checked={reportForm.sharedWithPatient}
-                onChange={(e) => setReportForm({ ...reportForm, sharedWithPatient: e.target.checked })}
-              />
-              مشاركة التقرير مع المريض ببوابته
-            </label>
-            {reportError && <p className="error">{reportError}</p>}
-            <button className="primary" disabled={reportLoading}>{reportLoading ? "..." : "حفظ التقرير"}</button>
-          </form>
-        </div>
-      )}
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: "1.1rem" }}>التقارير</h1>
-        {reports.length === 0 && <p className="subtitle">لا يوجد تقارير بعد</p>}
-        {reports.map((r) => (
-          <div key={r.id} className="row list-item">
-            <div>{r.title}</div>
-            <span className="badge">{r.shared_with_patient ? "مشارك مع المريض" : "داخلي"}</span>
-          </div>
-        ))}
-      </div>
-
-      {(profile.role === "admin" || profile.role === "secretary") && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: "1.1rem" }}>إضافة فاتورة</h1>
-          <form onSubmit={addInvoice}>
-            <label>المبلغ ($)</label>
-            <input required type="number" min="0" step="0.01" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} />
-            {invoiceError && <p className="error">{invoiceError}</p>}
-            <button className="primary" disabled={invoiceLoading}>{invoiceLoading ? "..." : "إضافة فاتورة"}</button>
-          </form>
-        </div>
-      )}
-
-      <div className="card">
-        <h1 style={{ fontSize: "1.1rem" }}>الفواتير</h1>
-        {invoices.length === 0 && <p className="subtitle">لا يوجد فواتير بعد</p>}
-        {invoices.map((i) => (
-          <div key={i.id} className="list-item">
-            <div className="row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                ${Number(i.amount).toFixed(2)} — مدفوع ${Number(i.paid_amount).toFixed(2)}
-              </div>
-              <span className="badge">{INVOICE_STATUS_LABEL[i.status] ?? i.status}</span>
-              {(profile.role === "admin" || profile.role === "secretary") && (
-                <button
-                  onClick={() => deleteInvoice(i.id)}
-                  disabled={invoiceBusyId === i.id}
-                  className="link"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}
-                >
-                  حذف
-                </button>
+            <div>
+              <h1 style={{ marginBottom: 2 }}>{patient.full_name}</h1>
+              <p className="subtitle" style={{ margin: 0 }}>
+                {patient.phone}
+                {patient.blood_type ? ` — فصيلة الدم: ${patient.blood_type}` : ""}
+              </p>
+              {patient.allergies && (
+                <span className="badge badge-warn" style={{ marginTop: 6, display: "inline-block" }}>
+                  ⚠ حساسية: {patient.allergies}
+                </span>
               )}
             </div>
-            {(profile.role === "admin" || profile.role === "secretary") && i.status !== "paid" && (
-              <div className="row" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="مبلغ الدفعة"
-                  value={payAmount[i.id] ?? ""}
-                  onChange={(e) => setPayAmount({ ...payAmount, [i.id]: e.target.value })}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  onClick={() => recordPayment(i)}
-                  disabled={invoiceBusyId === i.id}
-                  className="primary"
-                >
-                  {invoiceBusyId === i.id ? "..." : "تسجيل دفعة"}
-                </button>
-              </div>
-            )}
-            {payError[i.id] && <p className="error" style={{ marginTop: 4 }}>{payError[i.id]}</p>}
           </div>
-        ))}
-      </div>
-    </main>
+          <a href="/dashboard" className="link">→ رجوع للداشبورد</a>
+        </div>
+
+        {totalDue > 0 && (profile.role === "admin" || profile.role === "secretary") && (
+          <div className="stat-grid" style={{ marginBottom: "var(--space-5)" }}>
+            <div className="stat-card">
+              <div className="stat-label">مبلغ مستحق على المريض</div>
+              <div className="stat-value" style={{ color: "var(--danger)" }}>${totalDue.toFixed(2)}</div>
+            </div>
+          </div>
+        )}
+
+        {isStaff && (
+          <div className="card mb-5">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>إضافة زيارة</h2>
+            <form onSubmit={addVisit}>
+              <div className="grid-2">
+                <div>
+                  <label>التشخيص</label>
+                  <input value={visitForm.diagnosis} onChange={(e) => setVisitForm({ ...visitForm, diagnosis: e.target.value })} />
+                </div>
+                <div>
+                  <label>ملاحظات</label>
+                  <input value={visitForm.notes} onChange={(e) => setVisitForm({ ...visitForm, notes: e.target.value })} />
+                </div>
+              </div>
+              {visitError && <p className="error">{visitError}</p>}
+              <button className="primary" disabled={visitLoading}>{visitLoading ? "..." : "حفظ الزيارة"}</button>
+            </form>
+          </div>
+        )}
+
+        <div className="card mb-5">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>الزيارات</h2>
+          {visits.length === 0 && <div className="empty-state">لا يوجد زيارات بعد</div>}
+          {visits.map((v) => (
+            <div key={v.id} className="list-item">
+              <div className="subtitle" style={{ margin: 0 }}>
+                {new Date(v.visited_at).toLocaleString("ar-LB")} — د. {v.profiles?.full_name ?? "—"}
+              </div>
+              {v.diagnosis && <div style={{ fontWeight: 600 }}>{v.diagnosis}</div>}
+              {v.notes && <div className="subtitle" style={{ margin: 0 }}>{v.notes}</div>}
+            </div>
+          ))}
+        </div>
+
+        {isStaff && (
+          <div className="card mb-5">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>إضافة تقرير</h2>
+            <form onSubmit={addReport}>
+              <label>عنوان التقرير</label>
+              <input required value={reportForm.title} onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })} />
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+                <input
+                  type="checkbox"
+                  style={{ width: "auto" }}
+                  checked={reportForm.sharedWithPatient}
+                  onChange={(e) => setReportForm({ ...reportForm, sharedWithPatient: e.target.checked })}
+                />
+                مشاركة التقرير مع المريض ببوابته
+              </label>
+              {reportError && <p className="error">{reportError}</p>}
+              <button className="primary" disabled={reportLoading}>{reportLoading ? "..." : "حفظ التقرير"}</button>
+            </form>
+          </div>
+        )}
+
+        <div className="card mb-5">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>التقارير</h2>
+          {reports.length === 0 && <div className="empty-state">لا يوجد تقارير بعد</div>}
+          {reports.map((r) => (
+            <div key={r.id} className="row list-item">
+              <div style={{ fontWeight: 600 }}>{r.title}</div>
+              <span className={`badge ${r.shared_with_patient ? "badge-success" : "badge-muted"}`}>
+                {r.shared_with_patient ? "مشارك مع المريض" : "داخلي"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {(profile.role === "admin" || profile.role === "secretary") && (
+          <div className="card mb-5">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>إضافة فاتورة</h2>
+            <form onSubmit={addInvoice}>
+              <label>المبلغ ($)</label>
+              <input required type="number" min="0" step="0.01" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} />
+              {invoiceError && <p className="error">{invoiceError}</p>}
+              <button className="primary" disabled={invoiceLoading}>{invoiceLoading ? "..." : "إضافة فاتورة"}</button>
+            </form>
+          </div>
+        )}
+
+        <div className="card">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>الفواتير</h2>
+          {invoices.length === 0 && <div className="empty-state">لا يوجد فواتير بعد</div>}
+          {invoices.map((i) => (
+            <div key={i.id} className="list-item">
+              <div className="row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, fontWeight: 600 }}>
+                  ${Number(i.amount).toFixed(2)} <span className="subtitle" style={{ margin: 0, fontWeight: 400 }}>— مدفوع ${Number(i.paid_amount).toFixed(2)}</span>
+                </div>
+                <span className={`badge ${INVOICE_STATUS_CLASS[i.status] ?? ""}`}>{INVOICE_STATUS_LABEL[i.status] ?? i.status}</span>
+                {(profile.role === "admin" || profile.role === "secretary") && (
+                  <button
+                    onClick={() => deleteInvoice(i.id)}
+                    disabled={invoiceBusyId === i.id}
+                    className="btn-danger-sm"
+                  >
+                    حذف
+                  </button>
+                )}
+              </div>
+              {(profile.role === "admin" || profile.role === "secretary") && i.status !== "paid" && (
+                <div className="row" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="مبلغ الدفعة"
+                    value={payAmount[i.id] ?? ""}
+                    onChange={(e) => setPayAmount({ ...payAmount, [i.id]: e.target.value })}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    onClick={() => recordPayment(i)}
+                    disabled={invoiceBusyId === i.id}
+                    className="primary"
+                    style={{ width: "auto", marginTop: 0, whiteSpace: "nowrap" }}
+                  >
+                    {invoiceBusyId === i.id ? "..." : "تسجيل دفعة"}
+                  </button>
+                </div>
+              )}
+              {payError[i.id] && <p className="error" style={{ marginTop: 4 }}>{payError[i.id]}</p>}
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
   );
 }

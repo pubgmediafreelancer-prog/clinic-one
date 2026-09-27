@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 const STATUS_LABEL: Record<string, string> = {
   wait: "بالانتظار", ok: "مؤكد", in: "بالعيادة", done: "انتهت", bad: "ملغى",
 };
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  wait: "badge-warn", ok: "badge-info", in: "badge-success", done: "badge-muted", bad: "badge-danger",
+};
+const ROLE_LABEL: Record<string, string> = { admin: "إدارة", doctor: "دكتور", secretary: "سكرتيرة" };
 
 export default function DashboardClient({ profile, appointments, doctors, patients }: { profile: any; appointments: any[]; doctors: any[]; patients: any[] }) {
   const router = useRouter();
@@ -102,109 +106,170 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setInviteCode(code);
   }
 
+  const todayStr = new Date().toDateString();
+  const todaysCount = appointments.filter((a) => new Date(a.scheduled_at).toDateString() === todayStr).length;
+  const pendingCount = appointments.filter((a) => a.status === "wait" || a.status === "ok").length;
+
   return (
-    <main className="page" style={{ maxWidth: 640 }}>
-      <div className="row">
-        <div>
-          <h1>{profile.clinics?.name ?? "العيادة"}</h1>
-          <p className="subtitle">{profile.full_name} — <span className="badge">{profile.role}</span></p>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <span className="sidebar-brand-logo">🩺</span>
+          كلينك ون
         </div>
-        <button onClick={signOut} className="link" style={{ background: "none", border: "none", cursor: "pointer" }}>خروج</button>
-      </div>
 
-      {profile.role === "admin" && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: "1.1rem" }}>دعوة عضو جديد</h1>
-          <label>الدور</label>
-          <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-            <option value="doctor">دكتور</option>
-            <option value="secretary">سكرتيرة</option>
-          </select>
-          <button className="primary" onClick={createInvite}>إنشاء رابط دعوة</button>
-          {inviteError && <p className="error">{inviteError}</p>}
-          {inviteCode && (
-            <p className="subtitle" style={{ marginTop: 12 }}>
-              رابط الدعوة: <code>/invite/{inviteCode}</code> (صلاحيته 7 أيام)
-            </p>
-          )}
+        <div className="sidebar-clinic">
+          <div className="sidebar-clinic-name">{profile.clinics?.name ?? "العيادة"}</div>
+          <div style={{ fontSize: "0.8rem", opacity: 0.7, marginTop: 2 }}>{profile.full_name}</div>
+          <span className="sidebar-clinic-role">{ROLE_LABEL[profile.role] ?? profile.role}</span>
         </div>
-      )}
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: "1.1rem" }}>حجز موعد جديد</h1>
-        <form onSubmit={bookAppointment}>
-          <label>اسم المريض</label>
-          <input required value={booking.patientName} onChange={(e) => setBooking({ ...booking, patientName: e.target.value })} />
+        <nav className="sidebar-nav">
+          <a className="sidebar-link active">📊 نظرة عامة</a>
+          <a className="sidebar-link">📅 المواعيد</a>
+          <a className="sidebar-link">🧑‍🤝‍🧑 المرضى</a>
+          {profile.role === "admin" && <a className="sidebar-link">➕ دعوة عضو</a>}
+        </nav>
 
-          <label>هاتف المريض</label>
-          <input required value={booking.patientPhone} onChange={(e) => setBooking({ ...booking, patientPhone: e.target.value })} placeholder="+9617xxxxxxx" />
+        <div className="sidebar-foot">
+          <button onClick={signOut} className="sidebar-signout">🚪 تسجيل الخروج</button>
+        </div>
+      </aside>
 
-          <label>الدكتور</label>
-          <select value={booking.doctorId} onChange={(e) => setBooking({ ...booking, doctorId: e.target.value })}>
-            <option value="">بدون تحديد</option>
-            {doctors.map((d) => (
-              <option key={d.id} value={d.id}>{d.full_name}</option>
-            ))}
-          </select>
+      <main className="app-main">
+        <div className="page-head">
+          <div className="eyebrow">لوحة التحكم</div>
+          <h1>أهلاً، {profile.full_name.split(" ")[0]} 👋</h1>
+          <p className="subtitle" style={{ margin: 0 }}>هذا ملخص عيادتك اليوم</p>
+        </div>
 
-          <label>تاريخ الموعد</label>
-          <input required type="date" value={booking.date} onChange={(e) => setBooking({ ...booking, date: e.target.value })} />
-
-          <label>وقت الموعد</label>
-          <input required type="time" value={booking.time} onChange={(e) => setBooking({ ...booking, time: e.target.value })} />
-
-          <label>نوع الزيارة</label>
-          <input value={booking.visitType} onChange={(e) => setBooking({ ...booking, visitType: e.target.value })} placeholder="كشف، مراجعة..." />
-
-          {bookingError && <p className="error">{bookingError}</p>}
-          {bookingOk && <p className="subtitle" style={{ color: "green" }}>{bookingOk}</p>}
-          <button className="primary" disabled={bookingLoading}>{bookingLoading ? "..." : "حجز الموعد"}</button>
-        </form>
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: "1.1rem" }}>المواعيد</h1>
-        {appointments.length === 0 && <p className="subtitle">لا يوجد مواعيد بعد</p>}
-        {appointments.map((a) => (
-          <div key={a.id} className="list-item row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
-              <div>{a.patients?.full_name}</div>
-              <div className="subtitle" style={{ margin: 0 }}>
-                {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
-              </div>
-            </a>
-            <select
-              value={a.status}
-              disabled={apptBusyId === a.id}
-              onChange={(e) => updateApptStatus(a.id, e.target.value)}
-              style={{ width: "auto" }}
-            >
-              {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => deleteAppt(a.id)}
-              disabled={apptBusyId === a.id}
-              className="link"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}
-            >
-              حذف
-            </button>
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-label">مواعيد اليوم</div>
+            <div className="stat-value">{todaysCount}</div>
+            <div className="stat-sub">من إجمالي {appointments.length} موعد</div>
           </div>
-        ))}
-      </div>
+          <div className="stat-card">
+            <div className="stat-label">مواعيد بانتظار التأكيد</div>
+            <div className="stat-value">{pendingCount}</div>
+            <div className="stat-sub">تحتاج متابعة</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">إجمالي المرضى</div>
+            <div className="stat-value">{patients.length}</div>
+            <div className="stat-sub">مسجّلين بالعيادة</div>
+          </div>
+        </div>
 
-      <div className="card">
-        <h1 style={{ fontSize: "1.1rem" }}>المرضى</h1>
-        {patients.length === 0 && <p className="subtitle">لا يوجد مرضى بعد</p>}
-        {patients.map((p) => (
-          <a key={p.id} href={`/dashboard/patients/${p.id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
-            <div>{p.full_name}</div>
-            <span className="subtitle" style={{ margin: 0 }}>{p.phone}</span>
-          </a>
-        ))}
-      </div>
-    </main>
+        {profile.role === "admin" && (
+          <div className="card mb-5">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>دعوة عضو جديد</h2>
+            <label>الدور</label>
+            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+              <option value="doctor">دكتور</option>
+              <option value="secretary">سكرتيرة</option>
+            </select>
+            <button className="primary" onClick={createInvite}>إنشاء رابط دعوة</button>
+            {inviteError && <p className="error">{inviteError}</p>}
+            {inviteCode && (
+              <p className="success-msg">
+                رابط الدعوة: <code>/invite/{inviteCode}</code> (صلاحيته 7 أيام)
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="card mb-5">
+          <h2 className="section-title" style={{ marginBottom: 12 }}>حجز موعد جديد</h2>
+          <form onSubmit={bookAppointment}>
+            <div className="grid-2">
+              <div>
+                <label>اسم المريض</label>
+                <input required value={booking.patientName} onChange={(e) => setBooking({ ...booking, patientName: e.target.value })} />
+              </div>
+              <div>
+                <label>هاتف المريض</label>
+                <input required value={booking.patientPhone} onChange={(e) => setBooking({ ...booking, patientPhone: e.target.value })} placeholder="+9617xxxxxxx" />
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <div>
+                <label>الدكتور</label>
+                <select value={booking.doctorId} onChange={(e) => setBooking({ ...booking, doctorId: e.target.value })}>
+                  <option value="">بدون تحديد</option>
+                  {doctors.map((d) => (
+                    <option key={d.id} value={d.id}>{d.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>نوع الزيارة</label>
+                <input value={booking.visitType} onChange={(e) => setBooking({ ...booking, visitType: e.target.value })} placeholder="كشف، مراجعة..." />
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <div>
+                <label>تاريخ الموعد</label>
+                <input required type="date" value={booking.date} onChange={(e) => setBooking({ ...booking, date: e.target.value })} />
+              </div>
+              <div>
+                <label>وقت الموعد</label>
+                <input required type="time" value={booking.time} onChange={(e) => setBooking({ ...booking, time: e.target.value })} />
+              </div>
+            </div>
+
+            {bookingError && <p className="error">{bookingError}</p>}
+            {bookingOk && <p className="success-msg">{bookingOk}</p>}
+            <button className="primary" disabled={bookingLoading}>{bookingLoading ? "..." : "حجز الموعد"}</button>
+          </form>
+        </div>
+
+        <div className="card mb-5">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>المواعيد</h2>
+          {appointments.length === 0 && <div className="empty-state">لا يوجد مواعيد بعد</div>}
+          {appointments.map((a) => (
+            <div key={a.id} className="list-item row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
+                <div className="subtitle" style={{ margin: 0 }}>
+                  {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
+                </div>
+              </a>
+              <select
+                value={a.status}
+                disabled={apptBusyId === a.id}
+                onChange={(e) => updateApptStatus(a.id, e.target.value)}
+                style={{ width: "auto" }}
+                className={STATUS_BADGE_CLASS[a.status]}
+              >
+                {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => deleteAppt(a.id)}
+                disabled={apptBusyId === a.id}
+                className="btn-danger-sm"
+              >
+                حذف
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>المرضى</h2>
+          {patients.length === 0 && <div className="empty-state">لا يوجد مرضى بعد</div>}
+          {patients.map((p) => (
+            <a key={p.id} href={`/dashboard/patients/${p.id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
+              <div style={{ fontWeight: 600 }}>{p.full_name}</div>
+              <span className="subtitle" style={{ margin: 0 }}>{p.phone}</span>
+            </a>
+          ))}
+        </div>
+      </main>
+    </div>
   );
 }

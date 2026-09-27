@@ -40,27 +40,45 @@ export default function PortalLogin() {
   }
 
   return (
-    <main className="page">
-      <div className="card">
-        <h1>بوابة المريض</h1>
-        <p className="subtitle">تسجيل الدخول برقم الهاتف</p>
+    <div className="auth-shell">
+      <aside className="auth-brand">
+        <div className="auth-brand-mark">
+          <span className="auth-brand-logo">🩺</span>
+          كلينك ون
+        </div>
+        <div>
+          <div className="auth-brand-headline">ملفك الطبي بين يديك</div>
+          <p className="auth-brand-sub" style={{ marginTop: 16 }}>
+            شوف تقاريرك وفواتيرك من أي وقت وأي مكان، بمجرد رقم هاتفك.
+          </p>
+        </div>
+        <div />
+      </aside>
+      <div className="auth-panel">
+        <div className="auth-form-wrap">
+          <div className="card">
+            <div className="eyebrow">بوابة المريض</div>
+            <h1>تسجيل الدخول</h1>
+            <p className="subtitle">تسجيل الدخول برقم الهاتف</p>
 
-        {step === "phone" ? (
-          <form onSubmit={sendOtp}>
-            <label>رقم الهاتف</label>
-            <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+9617xxxxxxx" />
-            {error && <p className="error">{error}</p>}
-            <button className="primary" disabled={loading}>{loading ? "..." : "إرسال رمز التحقق"}</button>
-          </form>
-        ) : (
-          <form onSubmit={verifyOtp}>
-            <label>رمز التحقق المرسل إلى {phone}</label>
-            <input required value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="1234" />
-            {error && <p className="error">{error}</p>}
-            <button className="primary" disabled={loading}>{loading ? "..." : "تأكيد"}</button>
-          </form>
-        )}
+            {step === "phone" ? (
+              <form onSubmit={sendOtp}>
+                <label>رقم الهاتف</label>
+                <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+9617xxxxxxx" />
+                {error && <p className="error">{error}</p>}
+                <button className="primary" disabled={loading}>{loading ? "..." : "إرسال رمز التحقق"}</button>
+              </form>
+            ) : (
+              <form onSubmit={verifyOtp}>
+                <label>رمز التحقق المرسل إلى {phone}</label>
+                <input required value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="1234" />
+                {error && <p className="error">{error}</p>}
+                <button className="primary" disabled={loading}>{loading ? "..." : "تأكيد"}</button>
+              </form>
+            )}
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

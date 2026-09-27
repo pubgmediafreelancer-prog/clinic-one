@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,19 +23,41 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="page">
-      <div className="card">
-        <h1>تسجيل الدخول</h1>
-        <p className="subtitle">لطاقم العيادة (admin / دكتور / سكرتيرة)</p>
-        <form onSubmit={handleSubmit}>
-          <label>البريد الإلكتروني</label>
-          <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label>كلمة المرور</label>
-          <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          {error && <p className="error">{error}</p>}
-          <button className="primary" disabled={loading}>{loading ? "..." : "دخول"}</button>
-        </form>
+    <div className="auth-shell">
+      <aside className="auth-brand">
+        <div className="auth-brand-mark">
+          <span className="auth-brand-logo">🩺</span>
+          كلينك ون
+        </div>
+        <div>
+          <div className="auth-brand-headline">أهلاً بعودتك</div>
+          <p className="auth-brand-sub" style={{ marginTop: 16 }}>
+            سجّل دخولك لمتابعة مواعيدك، ملفات مرضاك، وفواتير عيادتك من مكان واحد.
+          </p>
+        </div>
+        <div />
+      </aside>
+
+      <div className="auth-panel">
+        <div className="auth-form-wrap">
+          <div className="card">
+            <div className="eyebrow">طاقم العيادة</div>
+            <h1>تسجيل الدخول</h1>
+            <p className="subtitle">admin / دكتور / سكرتيرة</p>
+            <form onSubmit={handleSubmit}>
+              <label>البريد الإلكتروني</label>
+              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@clinic.com" />
+              <label>كلمة المرور</label>
+              <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              {error && <p className="error">{error}</p>}
+              <button className="primary" disabled={loading}>{loading ? "..." : "دخول"}</button>
+            </form>
+            <div style={{ textAlign: "center", marginTop: 20 }}>
+              <Link href="/signup" className="link">ما عندك عيادة؟ أنشئ حساب جديد ←</Link>
+            </div>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
