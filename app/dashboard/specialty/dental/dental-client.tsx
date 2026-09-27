@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/client";
 
 const ADULT_TEETH = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28,48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
 const COND_LABEL: Record<string, string> = {
-  healthy: "سليم", cavity: "تسوّس", filled: "محشو", crown: "تلبيس", missing: "مفقود", root_canal: "عصب",
+  healthy: "سليم", cavity: "تسوّس (Caries)", filled: "محشو", crown: "تلبيس", missing: "مفقود", root_canal: "عصب",
+  extraction: "قلع", implant: "زراعة", whitening: "تبييض",
 };
 const COND_COLOR: Record<string, string> = {
   healthy: "#e5e7eb", cavity: "#f87171", filled: "#60a5fa", crown: "#fbbf24", missing: "#9ca3af", root_canal: "#a78bfa",
+  extraction: "#ef4444", implant: "#34d399", whitening: "#67e8f9",
 };
 
 export default function DentalClient({ profile, patients }: { profile: any; patients: any[] }) {
@@ -17,6 +19,8 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
   const [teeth, setTeeth] = useState<Record<number, any>>({});
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [treatmentNote, setTreatmentNote] = useState("");
+  const [treatmentExtraNote, setTreatmentExtraNote] = useState("");
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -35,6 +39,19 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
     const map: Record<number, any> = {};
     for (const r of records ?? []) map[Number(r.tooth_number)] = r;
     setTeeth(map);
+    const toothIds = (records ?? []).map((r: any) => r.id);
+    if (toothIds.length > 0) {
+      const { data: treatments } = await supabase
+        .from("tooth_treatments")
+        .select("id, tooth_id, procedure, notes, performed_at")
+        .in("tooth_id", toothIds)
+        .order("performed_at", { ascending: false });
+      const byToothId: Record<string, number> = {};
+      for (const r of records ?? []) byToothId[r.id] = Number(r.tooth_number);
+      setHistory((treatments ?? []).map((t: any) => ({ ...t, toothNumber: byToothId[t.tooth_id] })));
+    } else {
+      setHistory([]);
+    }
     setLoading(false);
     setSelectedTooth(null);
   }
@@ -57,9 +74,15 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
     if (!selectedTooth || !treatmentNote.trim()) return;
     const rec = teeth[selectedTooth];
     if (!rec) return;
-    await supabase.from("tooth_treatments").insert({ tooth_id: rec.id, procedure: treatmentNote });
+    await supabase.from("tooth_treatments").insert({
+      tooth_id: rec.id,
+      procedure: treatmentNote,
+      notes: treatmentExtraNote || null,
+      performed_at: new Date().toISOString(),
+    });
     setTreatmentNote("");
-    alert("تم حفظ إجراء العلاج");
+    setTreatmentExtraNote("");
+    loadChart(patientId);
   }
 
   return (
@@ -135,11 +158,27 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
                   {Object.entries(COND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
 
-                <label style={{ marginTop: 12 }}>تسجيل إجراء علاجي</label>
+                <label style={{ marginTop: 12 }}>تسجيل إجراء علاجي (Add Dental Note)</label>
                 <input value={treatmentNote} onChange={(e) => setTreatmentNote(e.target.value)} placeholder="مثال: حشو تجميلي" />
+                <label style={{ marginTop: 8 }}>ملاحظات إضافية</label>
+                <input value={treatmentExtraNote} onChange={(e) => setTreatmentExtraNote(e.target.value)} placeholder="اختياري" />
                 <button className="primary" style={{ marginTop: 8, width: "auto" }} onClick={addTreatment}>حفظ الإجراء</button>
               </div>
             )}
+
+            <div className="card" style={{ marginTop: "var(--space-5)" }}>
+              <h2 className="section-title" style={{ marginBottom: 8 }}>سجل الأسنان (Patient Dental History)</h2>
+              {history.length === 0 && <div className="empty-state">لا يوجد إجراءات مسجلة</div>}
+              {history.map((h) => (
+                <div key={h.id} className="list-item">
+                  <div className="subtitle" style={{ margin: 0 }}>
+                    {new Date(h.performed_at).toLocaleDateString("ar-LB")} — السن رقم {h.toothNumber}
+                  </div>
+                  <div style={{ fontWeight: 600 }}>{h.procedure}</div>
+                  {h.notes && <div className="subtitle" style={{ margin: 0 }}>{h.notes}</div>}
+                </div>
+              ))}
+            </div>
           </>
         )}
       </main>
