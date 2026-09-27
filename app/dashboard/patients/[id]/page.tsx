@@ -55,6 +55,12 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
         .order("paid_at", { ascending: false })
     : { data: [] as any[] };
 
+  const { data: prescriptions } = await supabase
+    .from("prescriptions")
+    .select("id, issued_at, notes, profiles(full_name), prescription_items(id, drug_name_free_text, dosage, frequency, duration, instructions, drugs(name))")
+    .eq("patient_id", id)
+    .order("issued_at", { ascending: false });
+
   return (
     <PatientFileClient
       profile={profile as any}
@@ -64,6 +70,7 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
       reports={(reports as any) ?? []}
       invoices={(invoices as any) ?? []}
       payments={(payments as any) ?? []}
+      prescriptions={(prescriptions as any) ?? []}
     />
   );
 }

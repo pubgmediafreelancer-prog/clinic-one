@@ -20,11 +20,75 @@ function fmtMoney(amount: number, currency: string) {
 }
 
 export default function PatientFileClient({
-  profile, clinic, patient, visits, reports, invoices, payments,
-}: { profile: any; clinic: any; patient: any; visits: any[]; reports: any[]; invoices: any[]; payments: any[] }) {
+  profile, clinic, patient, visits, reports, invoices, payments, prescriptions,
+}: { profile: any; clinic: any; patient: any; visits: any[]; reports: any[]; invoices: any[]; payments: any[]; prescriptions: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const exchangeRate = Number(clinic?.exchange_rate) || 89000;
+
+  const [drugQuery, setDrugQuery] = useState("");
+  const [drugResults, setDrugResults] = useState<any[]>([]);
+  const [rxItems, setRxItems] = useState<{ drugId: string | null; name: string; dosage: string; frequency: string; duration: string; instructions: string }[]>([]);
+  const [rxNotes, setRxNotes] = useState("");
+  const [rxError, setRxError] = useState<string | null>(null);
+  const [rxLoading, setRxLoading] = useState(false);
+
+  async function searchDrugs(q: string) {
+    setDrugQuery(q);
+    if (!q.trim()) { setDrugResults([]); return; }
+    const { data } = await supabase.from("drugs").select("id, name, generic_name, strength").ilike("name", `%${q}%`).limit(8);
+    setDrugResults(data ?? []);
+  }
+
+  function addRxItem(drug?: any) {
+    setRxItems([...rxItems, {
+      drugId: drug?.id ?? null,
+      name: drug ? `${drug.name}${drug.strength ? " " + drug.strength : ""}` : drugQuery,
+      dosage: "", frequency: "", duration: "", instructions: "",
+    }]);
+    setDrugQuery("");
+    setDrugResults([]);
+  }
+
+  function updateRxItem(idx: number, field: string, value: string) {
+    const next = [...rxItems];
+    (next[idx] as any)[field] = value;
+    setRxItems(next);
+  }
+
+  function removeRxItem(idx: number) {
+    setRxItems(rxItems.filter((_, i) => i !== idx));
+  }
+
+  async function savePrescription(e: React.FormEvent) {
+    e.preventDefault();
+    setRxError(null);
+    if (rxItems.length === 0) { setRxError("أضف دواء واحد على الأقل"); return; }
+    setRxLoading(true);
+    const { data: rx, error } = await supabase.from("prescriptions").insert({
+      clinic_id: profile.clinic_id,
+      patient_id: patient.id,
+      doctor_id: profile.id,
+      notes: rxNotes || null,
+    }).select("id").single();
+    if (error || !rx) { setRxLoading(false); setRxError(error?.message ?? "خطأ"); return; }
+    const { error: itemsError } = await supabase.from("prescription_items").insert(
+      rxItems.map((it) => ({
+        prescription_id: rx.id,
+        drug_id: it.drugId,
+        drug_name_free_text: it.drugId ? null : it.name,
+        dosage: it.dosage || "-",
+        frequency: it.frequency || "-",
+        duration: it.duration || "-",
+        instructions: it.instructions || null,
+      }))
+    );
+    setRxLoading(false);
+    if (itemsError) { setRxError(itemsError.message); return; }
+    setRxItems([]);
+    setRxNotes("");
+    router.refresh();
+  }
 
   const [visitForm, setVisitForm] = useState({ diagnosis: "", notes: "" });
   const [visitError, setVisitError] = useState<string | null>(null);
@@ -269,6 +333,90 @@ export default function PatientFileClient({
               <span className={`badge ${r.shared_with_patient ? "badge-success" : "badge-muted"}`}>
                 {r.shared_with_patient ? "مشارك مع المريض" : "داخلي"}
               </span>
+            </div>
+          ))}
+        </div>
+
+        {isDoctor && (
+          <div className="card mb-5">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>وصفة طبية جديدة</h2>
+            <form onSubmit={savePrescription}>
+              <label>بحث عن دواء</label>
+              <input
+                value={drugQuery}
+                onChange={(e) => searchDrugs(e.target.value)}
+                placeholder="اكتب اسم الدواء..."
+              />
+              {drugResults.length > 0 && (
+                <div className="card" style={{ marginTop: 6, padding: 8 }}>
+                  {drugResults.map((d) => (
+                    <div
+                      key={d.id}
+                      className="list-item"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => addRxItem(d)}
+                    >
+                      {d.name} {d.strength ? `(${d.strength})` : ""}
+                      {d.generic_name && <span className="subtitle" style={{ margin: 0 }}> — {d.generic_name}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {drugQuery.trim() && drugResults.length === 0 && (
+                <button type="button" className="btn-danger-sm" style={{ marginTop: 6 }} onClick={() => addRxItem()}>
+                  إضافة "{drugQuery}" كدواء جديد
+                </button>
+              )}
+
+              {rxItems.map((it, idx) => (
+                <div key={idx} className="card" style={{ marginTop: 10, padding: 10 }}>
+                  <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>{it.name}</strong>
+                    <button type="button" className="btn-danger-sm" onClick={() => removeRxItem(idx)}>حذف</button>
+                  </div>
+                  <div className="grid-2" style={{ marginTop: 8 }}>
+                    <div>
+                      <label>الجرعة</label>
+                      <input value={it.dosage} onChange={(e) => updateRxItem(idx, "dosage", e.target.value)} placeholder="مثال: حبة واحدة" />
+                    </div>
+                    <div>
+                      <label>التكرار</label>
+                      <input value={it.frequency} onChange={(e) => updateRxItem(idx, "frequency", e.target.value)} placeholder="مثال: 3 مرات يومياً" />
+                    </div>
+                  </div>
+                  <div className="grid-2">
+                    <div>
+                      <label>المدة</label>
+                      <input value={it.duration} onChange={(e) => updateRxItem(idx, "duration", e.target.value)} placeholder="مثال: 7 أيام" />
+                    </div>
+                    <div>
+                      <label>تعليمات إضافية</label>
+                      <input value={it.instructions} onChange={(e) => updateRxItem(idx, "instructions", e.target.value)} placeholder="مثال: بعد الأكل" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <label style={{ marginTop: 12 }}>ملاحظات عامة</label>
+              <input value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />
+              {rxError && <p className="error">{rxError}</p>}
+              <button className="primary" disabled={rxLoading}>{rxLoading ? "..." : "حفظ الوصفة"}</button>
+            </form>
+          </div>
+        )}
+
+        <div className="card mb-5">
+          <h2 className="section-title" style={{ marginBottom: 8 }}>الوصفات الطبية</h2>
+          {prescriptions.length === 0 && <div className="empty-state">لا يوجد وصفات بعد</div>}
+          {prescriptions.map((rx) => (
+            <div key={rx.id} className="row list-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>{new Date(rx.issued_at).toLocaleDateString("ar-LB")} — د. {rx.profiles?.full_name ?? "—"}</div>
+                <div className="subtitle" style={{ margin: 0 }}>
+                  {(rx.prescription_items ?? []).map((it: any) => it.drugs?.name ?? it.drug_name_free_text).join("، ")}
+                </div>
+              </div>
+              <a className="link" href={`/dashboard/prescriptions/${rx.id}/print`} target="_blank" rel="noreferrer">🖨 طباعة / PDF</a>
             </div>
           ))}
         </div>
