@@ -23,14 +23,25 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
 
   const { data: patient } = await supabase
     .from("patients")
-    .select("id, full_name, phone, date_of_birth, blood_type, allergies, notes")
+    .select(
+      "id, full_name, phone, date_of_birth, gender, address, file_number, blood_type, allergies, chronic_conditions, current_medications, notes, assigned_doctor_id, assigned_doctor:profiles!patients_assigned_doctor_id_fkey(full_name)"
+    )
     .eq("id", id)
     .single();
   if (!patient) redirect("/dashboard");
 
+  const { data: doctors } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("clinic_id", profile.clinic_id)
+    .eq("role", "doctor")
+    .order("full_name");
+
   const { data: visits } = await supabase
     .from("visits")
-    .select("id, visited_at, diagnosis, notes, profiles(full_name)")
+    .select(
+      "id, visited_at, reason_for_visit, chief_complaint, blood_pressure, heart_rate_bpm, temperature_c, oxygen_saturation, weight_kg, height_cm, examination, diagnosis, treatment_plan, notes, follow_up_date, profiles(full_name)"
+    )
     .eq("patient_id", id)
     .order("visited_at", { ascending: false });
 
@@ -66,6 +77,7 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
       profile={profile as any}
       clinic={(clinic as any) ?? { exchange_rate: 89000 }}
       patient={patient as any}
+      doctors={(doctors as any) ?? []}
       visits={(visits as any) ?? []}
       reports={(reports as any) ?? []}
       invoices={(invoices as any) ?? []}
