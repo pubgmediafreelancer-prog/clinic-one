@@ -29,10 +29,17 @@ export default async function DashboardPage() {
 
   const { data: patients } = await supabase
     .from("patients")
-    .select("id, full_name, phone, file_number")
+    .select("id, full_name, phone, file_number, created_at")
     .eq("clinic_id", profile.clinic_id)
     .order("created_at", { ascending: false })
     .limit(300);
+
+  const { data: invoices } = await supabase
+    .from("invoices")
+    .select("id, amount, paid_amount, status, currency, exchange_rate_used, created_at")
+    .eq("clinic_id", profile.clinic_id)
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   const { data: services } = await supabase
     .from("services")
@@ -47,6 +54,7 @@ export default async function DashboardPage() {
       doctors={(doctors as any) ?? []}
       patients={(patients as any) ?? []}
       services={(services as any) ?? []}
+      invoices={(invoices as any) ?? []}
     />
   );
 }

@@ -23,11 +23,12 @@ const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
   { key: "obgyn", label: "النساء والولادة", icon: "🤰" },
 ];
 
-export default function DashboardClient({ profile, appointments, doctors, patients, services }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[] }) {
+export default function DashboardClient({ profile, appointments, doctors, patients, services, invoices }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[]; invoices: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const clinic = profile.clinics ?? {};
   const activeSpecialties: string[] = clinic.specialties ?? ["general"];
+  const exchangeRate = Number(clinic.exchange_rate) || 89000;
 
   const [specialtiesForm, setSpecialtiesForm] = useState<string[]>(activeSpecialties.filter((s) => s !== "general"));
   const [exchangeRateForm, setExchangeRateForm] = useState(String(clinic.exchange_rate ?? 89000));
@@ -86,6 +87,59 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setServiceBusyId(null);
     router.refresh();
   }
+
+  const [reportRange, setReportRange] = useState<"today" | "week" | "month" | "custom">("today");
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+
+  function dateInRange(dateStr: string) {
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (reportRange === "today") return d.toDateString() === now.toDateString();
+    if (reportRange === "week") {
+      const diff = (now.getTime() - d.getTime()) / (1000 * 3600 * 24);
+      return diff >= 0 && diff <= 7;
+    }
+    if (reportRange === "month") {
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+    if (reportRange === "custom") {
+      if (!reportFrom && !reportTo) return true;
+      const from = reportFrom ? new Date(reportFrom) : null;
+      const to = reportTo ? new Date(reportTo + "T23:59:59") : null;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    return true;
+  }
+
+  const reportAppointments = appointments.filter((a) => dateInRange(a.scheduled_at));
+  const reportNewPatients = patients.filter((p) => p.created_at && dateInRange(p.created_at));
+  const reportInvoices = invoices.filter((i) => dateInRange(i.created_at));
+  const reportCompleted = reportAppointments.filter((a) => a.status === "completed").length;
+  const reportCancelled = reportAppointments.filter((a) => a.status === "cancelled").length;
+  const reportNoShow = reportAppointments.filter((a) => a.status === "no_show").length;
+  const reportRevenueUsd = reportInvoices.reduce((s, i) => {
+    const paid = Number(i.paid_amount) || 0;
+    const paidUsd = i.currency === "LBP" ? paid / (Number(i.exchange_rate_used) || exchangeRate) : paid;
+    return s + paidUsd;
+  }, 0);
+  const reportOutstandingUsd = reportInvoices.reduce((s, i) => {
+    const remaining = (Number(i.amount) || 0) - (Number(i.paid_amount) || 0);
+    const remainingUsd = i.currency === "LBP" ? remaining / (Number(i.exchange_rate_used) || exchangeRate) : remaining;
+    return s + remainingUsd;
+  }, 0);
+  const doctorPerformance = doctors.map((d) => {
+    const apps = reportAppointments.filter((a) => a.doctor_id === d.id);
+    return {
+      id: d.id,
+      name: d.full_name,
+      total: apps.length,
+      completed: apps.filter((a) => a.status === "completed").length,
+      noShow: apps.filter((a) => a.status === "no_show").length,
+    };
+  });
 
   const [inviteRole, setInviteRole] = useState("doctor");
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -217,7 +271,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     (!apptDoctorFilter || a.doctor_id === apptDoctorFilter) && inRange(a.scheduled_at, apptRangeFilter)
   );
 
-  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "invite" | "settings">("overview");
+  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "reports" | "invite" | "settings">("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   function setTab(next: typeof tab) {
     setTabRaw(next);
@@ -288,6 +342,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           )}
           {profile.role === "admin" && (
             <>
+              <button className={`sidebar-link ${tab === "reports" ? "active" : ""}`} onClick={() => setTab("reports")}>📈 التقارير</button>
               <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
               <button className={`sidebar-link ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>⚙️ إعدادات العيادة</button>
             </>
@@ -609,6 +664,61 @@ export default function DashboardClient({ profile, appointments, doctors, patien
                     {s.active ? "تعطيل" : "تفعيل"}
                   </button>
                   <button className="btn-danger-sm" disabled={serviceBusyId === s.id} onClick={() => deleteService(s.id)}>حذف</button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === "reports" && profile.role === "admin" && (
+          <>
+            <div className="card mb-5">
+              <div className="row" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {(["today", "week", "month", "custom"] as const).map((r) => (
+                  <button
+                    key={r}
+                    className={reportRange === r ? "primary" : "btn-sm"}
+                    style={{ width: "auto", marginTop: 0 }}
+                    onClick={() => setReportRange(r)}
+                  >
+                    {{ today: "اليوم", week: "هذا الأسبوع", month: "هذا الشهر", custom: "فترة مخصصة" }[r]}
+                  </button>
+                ))}
+              </div>
+              {reportRange === "custom" && (
+                <div className="grid-2" style={{ marginTop: 12 }}>
+                  <div>
+                    <label>من تاريخ</label>
+                    <input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} />
+                  </div>
+                  <div>
+                    <label>إلى تاريخ</label>
+                    <input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="stat-grid" style={{ marginBottom: "var(--space-5)" }}>
+              <div className="stat-card"><div className="stat-label">إجمالي المرضى</div><div className="stat-value">{patients.length}</div></div>
+              <div className="stat-card"><div className="stat-label">مرضى جدد</div><div className="stat-value">{reportNewPatients.length}</div></div>
+              <div className="stat-card"><div className="stat-label">المواعيد</div><div className="stat-value">{reportAppointments.length}</div></div>
+              <div className="stat-card"><div className="stat-label">زيارات مكتملة</div><div className="stat-value">{reportCompleted}</div></div>
+              <div className="stat-card"><div className="stat-label">مواعيد ملغاة</div><div className="stat-value">{reportCancelled}</div></div>
+              <div className="stat-card"><div className="stat-label">لم يحضروا</div><div className="stat-value">{reportNoShow}</div></div>
+              <div className="stat-card"><div className="stat-label">الإيرادات (تقريبي $)</div><div className="stat-value" style={{ color: "var(--brand-700)" }}>${reportRevenueUsd.toFixed(2)}</div></div>
+              <div className="stat-card"><div className="stat-label">مبالغ مستحقة (تقريبي $)</div><div className="stat-value" style={{ color: "var(--danger)" }}>${reportOutstandingUsd.toFixed(2)}</div></div>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title" style={{ marginBottom: 8 }}>أداء الأطباء</h2>
+              {doctorPerformance.length === 0 && <div className="empty-state">لا يوجد أطباء</div>}
+              {doctorPerformance.map((d) => (
+                <div key={d.id} className="row list-item" style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontWeight: 600 }}>د. {d.name}</div>
+                  <div className="subtitle" style={{ margin: 0 }}>
+                    {d.total} موعد — {d.completed} مكتمل — {d.noShow} لم يحضر
+                  </div>
                 </div>
               ))}
             </div>
