@@ -9,7 +9,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, clinic_id, clinics(name)")
+    .select("id, full_name, role, clinic_id, clinics(name)")
     .eq("id", user.id)
     .single();
 
@@ -17,7 +17,7 @@ export default async function DashboardPage() {
 
   const { data: appointments } = await supabase
     .from("appointments")
-    .select("id, scheduled_at, visit_type, status, patients(full_name), profiles(full_name)")
+    .select("id, scheduled_at, visit_type, status, patient_id, patients(full_name), profiles(full_name)")
     .order("scheduled_at", { ascending: true })
     .limit(50);
 
@@ -27,11 +27,19 @@ export default async function DashboardPage() {
     .eq("role", "doctor")
     .eq("clinic_id", profile.clinic_id);
 
+  const { data: patients } = await supabase
+    .from("patients")
+    .select("id, full_name, phone")
+    .eq("clinic_id", profile.clinic_id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
   return (
     <DashboardClient
       profile={profile as any}
       appointments={(appointments as any) ?? []}
       doctors={(doctors as any) ?? []}
+      patients={(patients as any) ?? []}
     />
   );
 }

@@ -7,7 +7,7 @@ const STATUS_LABEL: Record<string, string> = {
   wait: "بالانتظار", ok: "مؤكد", in: "بالعيادة", done: "انتهت", bad: "ملغى",
 };
 
-export default function DashboardClient({ profile, appointments, doctors }: { profile: any; appointments: any[]; doctors: any[] }) {
+export default function DashboardClient({ profile, appointments, doctors, patients }: { profile: any; appointments: any[]; doctors: any[]; patients: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const [inviteRole, setInviteRole] = useState("doctor");
@@ -145,19 +145,30 @@ export default function DashboardClient({ profile, appointments, doctors }: { pr
         </form>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: "1.1rem" }}>المواعيد</h1>
         {appointments.length === 0 && <p className="subtitle">لا يوجد مواعيد بعد</p>}
         {appointments.map((a) => (
-          <div key={a.id} className="list-item row">
+          <a key={a.id} href={`/dashboard/patients/${a.patient_id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
             <div>
               <div>{a.patients?.full_name}</div>
               <div className="subtitle" style={{ margin: 0 }}>
-                {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name}
+                {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
               </div>
             </div>
             <span className="badge">{STATUS_LABEL[a.status] ?? a.status}</span>
-          </div>
+          </a>
+        ))}
+      </div>
+
+      <div className="card">
+        <h1 style={{ fontSize: "1.1rem" }}>المرضى</h1>
+        {patients.length === 0 && <p className="subtitle">لا يوجد مرضى بعد</p>}
+        {patients.map((p) => (
+          <a key={p.id} href={`/dashboard/patients/${p.id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
+            <div>{p.full_name}</div>
+            <span className="subtitle" style={{ margin: 0 }}>{p.phone}</span>
+          </a>
         ))}
       </div>
     </main>
