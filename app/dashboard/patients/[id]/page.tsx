@@ -15,6 +15,12 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
     .single();
   if (!profile) redirect("/login");
 
+  const { data: clinic } = await supabase
+    .from("clinics")
+    .select("id, exchange_rate")
+    .eq("id", profile.clinic_id)
+    .single();
+
   const { data: patient } = await supabase
     .from("patients")
     .select("id, full_name, phone, date_of_birth, blood_type, allergies, notes")
@@ -36,17 +42,28 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
 
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, amount, paid_amount, status, created_at")
+    .select("id, amount, paid_amount, status, currency, amount_usd_equiv, exchange_rate_used, created_at")
     .eq("patient_id", id)
     .order("created_at", { ascending: false });
+
+  const invoiceIds = (invoices ?? []).map((i: any) => i.id);
+  const { data: payments } = invoiceIds.length
+    ? await supabase
+        .from("payments")
+        .select("id, invoice_id, amount, currency, method, exchange_rate_used, reference, paid_at")
+        .in("invoice_id", invoiceIds)
+        .order("paid_at", { ascending: false })
+    : { data: [] as any[] };
 
   return (
     <PatientFileClient
       profile={profile as any}
+      clinic={(clinic as any) ?? { exchange_rate: 89000 }}
       patient={patient as any}
       visits={(visits as any) ?? []}
       reports={(reports as any) ?? []}
       invoices={(invoices as any) ?? []}
+      payments={(payments as any) ?? []}
     />
   );
 }
