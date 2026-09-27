@@ -18,8 +18,11 @@ export default function ObgynClient({ profile, patients }: { profile: any; patie
   const [pregnancies, setPregnancies] = useState<any[]>([]);
   const [metricsByPregnancy, setMetricsByPregnancy] = useState<Record<string, any[]>>({});
   const [lmp, setLmp] = useState("");
-  const [metricForm, setMetricForm] = useState<Record<string, { week: string; weight: string; hr: string }>>({});
+  const [prevPregnancies, setPrevPregnancies] = useState("");
+  const [prevPregnanciesNotes, setPrevPregnanciesNotes] = useState("");
+  const [metricForm, setMetricForm] = useState<Record<string, { week: string; weight: string; hr: string; bp: string; motherWeight: string; recordType: string; notes: string }>>({});
   const [loading, setLoading] = useState(false);
+  const RECORD_TYPE_LABEL: Record<string, string> = { visit: "زيارة", ultrasound: "سونار", lab: "تحليل مخبري" };
 
   useEffect(() => { if (patientId) load(patientId); }, [patientId]);
 
@@ -44,8 +47,12 @@ export default function ObgynClient({ profile, patients }: { profile: any; patie
       patient_id: patientId,
       last_menstrual_date: lmp,
       estimated_due_date: edd.toISOString().slice(0, 10),
+      previous_pregnancies: prevPregnancies ? Number(prevPregnancies) : null,
+      previous_pregnancies_notes: prevPregnanciesNotes || null,
     });
     setLmp("");
+    setPrevPregnancies("");
+    setPrevPregnanciesNotes("");
     load(patientId);
   }
 
@@ -62,8 +69,12 @@ export default function ObgynClient({ profile, patients }: { profile: any; patie
       gestational_week: Number(f.week),
       weight_grams: f.weight ? Number(f.weight) : null,
       heart_rate_bpm: f.hr ? Number(f.hr) : null,
+      blood_pressure: f.bp || null,
+      mother_weight_kg: f.motherWeight ? Number(f.motherWeight) : null,
+      record_type: f.recordType || "visit",
+      notes: f.notes || null,
     });
-    setMetricForm({ ...metricForm, [pregnancyId]: { week: "", weight: "", hr: "" } });
+    setMetricForm({ ...metricForm, [pregnancyId]: { week: "", weight: "", hr: "", bp: "", motherWeight: "", recordType: "visit", notes: "" } });
     load(patientId);
   }
 
@@ -94,6 +105,10 @@ export default function ObgynClient({ profile, patients }: { profile: any; patie
                   تاريخ الولادة المتوقع (EDD): {addDays(lmp, 280).toLocaleDateString("ar-LB")} — الأسبوع الحالي: {gestationalWeek(lmp)}
                 </p>
               )}
+              <label style={{ marginTop: 8 }}>عدد حالات الحمل السابقة</label>
+              <input type="number" min="0" value={prevPregnancies} onChange={(e) => setPrevPregnancies(e.target.value)} />
+              <label>ملاحظات عن الحمل السابق</label>
+              <input value={prevPregnanciesNotes} onChange={(e) => setPrevPregnanciesNotes(e.target.value)} placeholder="مثال: ولادة قيصرية عام 2023" />
               <button className="primary" style={{ marginTop: 8, width: "auto" }} onClick={startPregnancy}>بدء تتبع الحمل</button>
             </div>
 
@@ -103,35 +118,61 @@ export default function ObgynClient({ profile, patients }: { profile: any; patie
               {pregnancies.map((p) => {
                 const metrics = metricsByPregnancy[p.id] ?? [];
                 const currentWeek = gestationalWeek(p.last_menstrual_date);
-                const f = metricForm[p.id] ?? { week: String(currentWeek), weight: "", hr: "" };
+                const f = metricForm[p.id] ?? { week: String(currentWeek), weight: "", hr: "", bp: "", motherWeight: "", recordType: "visit", notes: "" };
                 return (
                   <div key={p.id} className="card" style={{ marginBottom: 12, padding: 12 }}>
                     <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
                         <div style={{ fontWeight: 600 }}>تاريخ الولادة المتوقع: {new Date(p.estimated_due_date).toLocaleDateString("ar-LB")}</div>
                         <div className="subtitle" style={{ margin: 0 }}>الأسبوع الحالي: {currentWeek} — {p.active ? "حمل نشط" : "منتهي"}</div>
+                        {(p.previous_pregnancies || p.previous_pregnancies_notes) && (
+                          <div className="subtitle" style={{ margin: 0 }}>
+                            حالات حمل سابقة: {p.previous_pregnancies ?? "—"}{p.previous_pregnancies_notes ? ` — ${p.previous_pregnancies_notes}` : ""}
+                          </div>
+                        )}
                       </div>
                       <span className={`badge ${p.active ? "badge-success" : "badge-muted"}`}>{p.active ? "نشط" : "منتهي"}</span>
                     </div>
 
                     {metrics.length > 0 && (
                       <div style={{ marginTop: 10 }}>
+                        <h3 style={{ fontSize: "0.9rem", marginBottom: 6 }}>Timeline الحمل</h3>
                         {metrics.map((m) => (
-                          <div key={m.id} className="subtitle" style={{ margin: 0 }}>
-                            الأسبوع {m.gestational_week} — الوزن {m.weight_grams ?? "—"} غرام — نبض القلب {m.heart_rate_bpm ?? "—"} bpm
+                          <div key={m.id} className="list-item">
+                            <div className="subtitle" style={{ margin: 0 }}>
+                              الأسبوع {m.gestational_week} — {RECORD_TYPE_LABEL[m.record_type] ?? "زيارة"} — {new Date(m.measured_at).toLocaleDateString("ar-LB")}
+                            </div>
+                            <div>
+                              {m.weight_grams ? `وزن الجنين: ${m.weight_grams}غ ` : ""}
+                              {m.heart_rate_bpm ? `نبض: ${m.heart_rate_bpm} ` : ""}
+                              {m.blood_pressure ? `ضغط الأم: ${m.blood_pressure} ` : ""}
+                              {m.mother_weight_kg ? `وزن الأم: ${m.mother_weight_kg}كغ` : ""}
+                            </div>
+                            {m.notes && <div className="subtitle" style={{ margin: 0 }}>{m.notes}</div>}
                           </div>
                         ))}
                       </div>
                     )}
 
                     {p.active && (
-                      <div className="row" style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                        <input type="number" placeholder="الأسبوع" value={f.week} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, week: e.target.value } })} style={{ width: 90 }} />
-                        <input type="number" placeholder="الوزن (غرام)" value={f.weight} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, weight: e.target.value } })} style={{ width: 130 }} />
-                        <input type="number" placeholder="نبض القلب" value={f.hr} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, hr: e.target.value } })} style={{ width: 110 }} />
-                        <button className="btn-sm" onClick={() => addMetric(p.id)}>حفظ القياس</button>
-                        <button className="btn-danger-sm" onClick={() => endPregnancy(p.id)}>إنهاء تتبع الحمل</button>
-                      </div>
+                      <>
+                        <h3 style={{ fontSize: "0.9rem", marginTop: 12, marginBottom: 6 }}>إضافة زيارة / سونار / تحليل</h3>
+                        <div className="row" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <select value={f.recordType} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, recordType: e.target.value } })} style={{ width: "auto" }}>
+                            <option value="visit">زيارة</option>
+                            <option value="ultrasound">سونار</option>
+                            <option value="lab">تحليل مخبري</option>
+                          </select>
+                          <input type="number" placeholder="الأسبوع" value={f.week} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, week: e.target.value } })} style={{ width: 90 }} />
+                          <input type="number" placeholder="وزن الجنين (غرام)" value={f.weight} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, weight: e.target.value } })} style={{ width: 140 }} />
+                          <input type="number" placeholder="نبض الجنين" value={f.hr} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, hr: e.target.value } })} style={{ width: 110 }} />
+                          <input placeholder="ضغط الأم" value={f.bp} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, bp: e.target.value } })} style={{ width: 100 }} />
+                          <input type="number" placeholder="وزن الأم (كغ)" value={f.motherWeight} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, motherWeight: e.target.value } })} style={{ width: 130 }} />
+                          <input placeholder="ملاحظات" value={f.notes} onChange={(e) => setMetricForm({ ...metricForm, [p.id]: { ...f, notes: e.target.value } })} style={{ flex: 1, minWidth: 150 }} />
+                          <button className="btn-sm" onClick={() => addMetric(p.id)}>حفظ</button>
+                          <button className="btn-danger-sm" onClick={() => endPregnancy(p.id)}>إنهاء تتبع الحمل</button>
+                        </div>
+                      </>
                     )}
                   </div>
                 );
