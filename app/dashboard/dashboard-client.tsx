@@ -4,11 +4,16 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const STATUS_LABEL: Record<string, string> = {
-  wait: "بالانتظار", ok: "مؤكد", in: "بالعيادة", done: "انتهت", bad: "ملغى",
+  scheduled: "مجدول", wait: "بالانتظار", ok: "مؤكد", in_consultation: "في الاستشارة",
+  completed: "انتهت", cancelled: "ملغى", no_show: "لم يحضر",
 };
 const STATUS_BADGE_CLASS: Record<string, string> = {
-  wait: "badge-warn", ok: "badge-info", in: "badge-success", done: "badge-muted", bad: "badge-danger",
+  scheduled: "badge-info", wait: "badge-warn", ok: "badge-info", in_consultation: "badge-success",
+  completed: "badge-muted", cancelled: "badge-danger", no_show: "badge-danger",
 };
+const QUEUE_STATUSES = ["wait", "in_consultation"];
+const QUEUE_NEXT: Record<string, string> = { wait: "in_consultation", in_consultation: "completed" };
+const QUEUE_NEXT_LABEL: Record<string, string> = { wait: "بدء الاستشارة", in_consultation: "إنهاء الاستشارة" };
 const ROLE_LABEL: Record<string, string> = { admin: "إدارة", doctor: "دكتور", secretary: "سكرتيرة" };
 
 export default function DashboardClient({ profile, appointments, doctors, patients }: { profile: any; appointments: any[]; doctors: any[]; patients: any[] }) {
@@ -110,7 +115,11 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   const todaysCount = appointments.filter((a) => new Date(a.scheduled_at).toDateString() === todayStr).length;
   const pendingCount = appointments.filter((a) => a.status === "wait" || a.status === "ok").length;
 
-  const [tab, setTab] = useState<"overview" | "appointments" | "patients" | "invite">("overview");
+  const [tab, setTab] = useState<"overview" | "appointments" | "queue" | "patients" | "invite">("overview");
+
+  const queueList = appointments
+    .filter((a) => QUEUE_STATUSES.includes(a.status) && new Date(a.scheduled_at).toDateString() === todayStr)
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   return (
     <div className="app-shell">
@@ -129,6 +138,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
         <nav className="sidebar-nav">
           <button className={`sidebar-link ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>📊 نظرة عامة</button>
           <button className={`sidebar-link ${tab === "appointments" ? "active" : ""}`} onClick={() => setTab("appointments")}>📅 المواعيد</button>
+          <button className={`sidebar-link ${tab === "queue" ? "active" : ""}`} onClick={() => setTab("queue")}>⏱ غرفة الانتظار {queueList.length > 0 ? `(${queueList.length})` : ""}</button>
           <button className={`sidebar-link ${tab === "patients" ? "active" : ""}`} onClick={() => setTab("patients")}>🧑‍🤝‍🧑 المرضى</button>
           {profile.role === "admin" && (
             <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
@@ -270,6 +280,43 @@ export default function DashboardClient({ profile, appointments, doctors, patien
               ))}
             </div>
           </>
+        )}
+
+        {tab === "queue" && (
+          <div className="card">
+            <div className="row" style={{ marginBottom: 8 }}>
+              <h2 className="section-title">غرفة الانتظار اليوم</h2>
+              <span className="subtitle" style={{ margin: 0 }}>{queueList.length} مريض بالطابور</span>
+            </div>
+            {queueList.length === 0 && <div className="empty-state">لا يوجد مرضى بغرفة الانتظار الآن</div>}
+            {queueList.map((a, idx) => (
+              <div key={a.id} className="list-item row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: "50%", background: "var(--brand-500)", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0,
+                }}>
+                  {idx + 1}
+                </div>
+                <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
+                  <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
+                  <div className="subtitle" style={{ margin: 0 }}>
+                    {new Date(a.scheduled_at).toLocaleTimeString("ar-LB")} — د. {a.profiles?.full_name ?? "—"}
+                  </div>
+                </a>
+                <span className={`badge ${STATUS_BADGE_CLASS[a.status]}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
+                {QUEUE_NEXT[a.status] && (
+                  <button
+                    className="primary"
+                    style={{ width: "auto", marginTop: 0, whiteSpace: "nowrap" }}
+                    disabled={apptBusyId === a.id}
+                    onClick={() => updateApptStatus(a.id, QUEUE_NEXT[a.status])}
+                  >
+                    {QUEUE_NEXT_LABEL[a.status]}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
         {tab === "patients" && (
