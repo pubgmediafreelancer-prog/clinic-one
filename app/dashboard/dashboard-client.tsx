@@ -153,6 +153,20 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setMobileMenuOpen(false);
   }
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchResults = (() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return patients
+      .filter((p) =>
+        (p.full_name ?? "").toLowerCase().includes(q) ||
+        (p.phone ?? "").toLowerCase().includes(q) ||
+        (p.file_number ?? "").toLowerCase().includes(q) ||
+        (p.id ?? "").toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  })();
+
   const queueList = appointments
     .filter((a) => QUEUE_STATUSES.includes(a.status) && new Date(a.scheduled_at).toDateString() === todayStr)
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
@@ -217,6 +231,36 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           <div className="eyebrow">لوحة التحكم</div>
           <h1>أهلاً، {profile.full_name.split(" ")[0]} 👋</h1>
           <p className="subtitle" style={{ margin: 0 }}>هذا ملخص عيادتك اليوم</p>
+        </div>
+
+        <div style={{ position: "relative", marginBottom: "var(--space-5)" }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="🔍 بحث عن مريض بالاسم، الهاتف، أو رقم الملف..."
+            style={{ maxWidth: 420 }}
+          />
+          {searchQuery.trim() && (
+            <div className="card" style={{
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: "auto", width: 420,
+              maxWidth: "calc(100vw - 32px)", zIndex: 50, padding: 8, maxHeight: 320, overflowY: "auto",
+            }}>
+              {searchResults.length === 0 && <div className="empty-state" style={{ padding: 12 }}>لا نتائج</div>}
+              {searchResults.map((p) => (
+                <a
+                  key={p.id}
+                  href={`/dashboard/patients/${p.id}`}
+                  className="list-item"
+                  style={{ display: "block", textDecoration: "none", color: "inherit" }}
+                >
+                  <div style={{ fontWeight: 600 }}>{p.full_name}</div>
+                  <div className="subtitle" style={{ margin: 0 }}>
+                    {p.phone}{p.file_number ? ` — ملف ${p.file_number}` : ""}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         {tab === "overview" && (
@@ -388,7 +432,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
             {patients.map((p) => (
               <a key={p.id} href={`/dashboard/patients/${p.id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
                 <div style={{ fontWeight: 600 }}>{p.full_name}</div>
-                <span className="subtitle" style={{ margin: 0 }}>{p.phone}</span>
+                <span className="subtitle" style={{ margin: 0 }}>{p.phone}{p.file_number ? ` — ملف ${p.file_number}` : ""}</span>
               </a>
             ))}
           </div>

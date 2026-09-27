@@ -29,10 +29,10 @@ export default async function DashboardPage() {
 
   const { data: patients } = await supabase
     .from("patients")
-    .select("id, full_name, phone")
+    .select("id, full_name, phone, file_number")
     .eq("clinic_id", profile.clinic_id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(300);
 
   return (
     <DashboardClient
