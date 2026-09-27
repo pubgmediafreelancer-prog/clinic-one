@@ -11,13 +11,14 @@ export default function SignupPage() {
   const [form, setForm] = useState({
     clinicName: "", specialty: "", phone: "", fullName: "", email: "", password: "",
   });
+  const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
@@ -33,7 +34,30 @@ export default function SignupPage() {
 
     setLoading(false);
     if (error) { setError(error.message); return; }
+
+    // If the project requires email confirmation, Supabase returns a user
+    // but no active session yet — going to /dashboard now would just bounce
+    // back with "Email not confirmed". Show a clear instruction instead.
+    if (data.user && !data.session) {
+      setConfirmSent(true);
+      return;
+    }
+
     router.push("/dashboard");
+  }
+
+  if (confirmSent) {
+    return (
+      <main className="page">
+        <div className="card">
+          <h1>تحقق من إيميلك</h1>
+          <p className="subtitle">
+            بعتنالك رابط تأكيد على {form.email}. افتحي الإيميل وضغطي على الرابط،
+            وبعدها رجعي سجلي دخول عادي.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (

@@ -21,10 +21,16 @@ export default async function DashboardPage() {
     .order("scheduled_at", { ascending: true })
     .limit(50);
 
+  const { data: doctors } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("role", "doctor");
+
   return (
     <DashboardClient
       profile={profile as any}
       appointments={(appointments as any) ?? []}
+      doctors={(doctors as any) ?? []}
     />
   );
 }
