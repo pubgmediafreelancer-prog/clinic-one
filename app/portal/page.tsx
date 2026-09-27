@@ -1,0 +1,66 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+// Patient login: phone number -> WhatsApp/SMS OTP -> verify -> land on /portal/records.
+// Uses Supabase's phone-OTP auth (delivered via whichever SMS/WhatsApp provider
+// is configured on the project — see Section 7 for wiring that provider up).
+export default function PortalLogin() {
+  const router = useRouter();
+  const supabase = createClient();
+  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function sendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    setStep("otp");
+  }
+
+  async function verifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.verifyOtp({ phone, token: otp, type: "sms" });
+    if (error) { setLoading(false); setError("الرمز غير صحيح"); return; }
+
+    // First login after verification: attach this phone to the patient
+    // record(s) the clinic already created for them.
+    await supabase.rpc("link_patient_by_phone");
+    setLoading(false);
+    router.push("/portal/records");
+  }
+
+  return (
+    <main className="page">
+      <div className="card">
+        <h1>بوابة المريض</h1>
+        <p className="subtitle">تسجيل الدخول برقم الهاتف</p>
+
+        {step === "phone" ? (
+          <form onSubmit={sendOtp}>
+            <label>رقم الهاتف</label>
+            <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+9617xxxxxxx" />
+            {error && <p className="error">{error}</p>}
+            <button className="primary" disabled={loading}>{loading ? "..." : "إرسال رمز التحقق"}</button>
+          </form>
+        ) : (
+          <form onSubmit={verifyOtp}>
+            <label>رمز التحقق المرسل إلى {phone}</label>
+            <input required value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="1234" />
+            {error && <p className="error">{error}</p>}
+            <button className="primary" disabled={loading}>{loading ? "..." : "تأكيد"}</button>
+          </form>
+        )}
+      </div>
+    </main>
+  );
+}
