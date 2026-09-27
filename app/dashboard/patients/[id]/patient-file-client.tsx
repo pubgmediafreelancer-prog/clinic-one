@@ -47,9 +47,9 @@ const EMPTY_VISIT_FORM = {
 };
 
 export default function PatientFileClient({
-  profile, clinic, patient, doctors, visits, reports, invoices, payments, prescriptions,
+  profile, clinic, patient, doctors, services, visits, reports, invoices, payments, prescriptions,
 }: {
-  profile: any; clinic: any; patient: any; doctors: any[]; visits: any[]; reports: any[];
+  profile: any; clinic: any; patient: any; doctors: any[]; services: any[]; visits: any[]; reports: any[];
   invoices: any[]; payments: any[]; prescriptions: any[];
 }) {
   const router = useRouter();
@@ -145,9 +145,34 @@ export default function PatientFileClient({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
-  const [invoiceForm, setInvoiceForm] = useState({ amount: "", currency: "USD" });
+  const [invoiceItems, setInvoiceItems] = useState<{ description: string; quantity: string; unitPrice: string }[]>([]);
+  const [invoiceCurrency, setInvoiceCurrency] = useState("USD");
+  const [invoiceDiscount, setInvoiceDiscount] = useState("0");
+  const [invoiceTaxPercent, setInvoiceTaxPercent] = useState("0");
+  const [manualAmount, setManualAmount] = useState("");
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+
+  function addInvoiceServiceItem(svc?: any) {
+    setInvoiceItems([...invoiceItems, {
+      description: svc ? svc.name : "",
+      quantity: "1",
+      unitPrice: svc ? String(svc.price) : "",
+    }]);
+    if (svc?.currency) setInvoiceCurrency(svc.currency);
+  }
+  function updateInvoiceItem(idx: number, field: string, value: string) {
+    const next = [...invoiceItems];
+    (next[idx] as any)[field] = value;
+    setInvoiceItems(next);
+  }
+  function removeInvoiceItem(idx: number) {
+    setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
+  }
+  const invoiceSubtotal = invoiceItems.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0), 0);
+  const invoiceAfterDiscount = Math.max(0, invoiceSubtotal - (Number(invoiceDiscount) || 0));
+  const invoiceTax = invoiceAfterDiscount * ((Number(invoiceTaxPercent) || 0) / 100);
+  const invoiceTotal = invoiceItems.length > 0 ? invoiceAfterDiscount + invoiceTax : Number(manualAmount) || 0;
 
   const [payAmount, setPayAmount] = useState<Record<string, string>>({});
   const [payCurrency, setPayCurrency] = useState<Record<string, string>>({});
@@ -228,11 +253,12 @@ export default function PatientFileClient({
   async function addInvoice(e: React.FormEvent) {
     e.preventDefault();
     setInvoiceError(null);
+    if (invoiceTotal <= 0) { setInvoiceError("أدخل مبلغ الفاتورة أو أضف بنداً واحداً على الأقل"); return; }
     setInvoiceLoading(true);
-    const amount = Number(invoiceForm.amount);
-    const currency = invoiceForm.currency;
+    const amount = invoiceTotal;
+    const currency = invoiceCurrency;
     const amountUsdEquiv = currency === "LBP" ? amount / exchangeRate : amount;
-    const { error } = await supabase.from("invoices").insert({
+    const { data: inv, error } = await supabase.from("invoices").insert({
       clinic_id: profile.clinic_id,
       patient_id: patient.id,
       amount,
@@ -241,10 +267,26 @@ export default function PatientFileClient({
       currency,
       amount_usd_equiv: amountUsdEquiv,
       exchange_rate_used: exchangeRate,
-    });
+      discount: Number(invoiceDiscount) || 0,
+      tax_percent: Number(invoiceTaxPercent) || 0,
+    }).select("id").single();
+    if (error || !inv) { setInvoiceLoading(false); setInvoiceError(error?.message ?? "خطأ"); return; }
+    if (invoiceItems.length > 0) {
+      const { error: itemsError } = await supabase.from("invoice_items").insert(
+        invoiceItems.map((it) => ({
+          invoice_id: inv.id,
+          description: it.description || "خدمة",
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unitPrice) || 0,
+        }))
+      );
+      if (itemsError) { setInvoiceLoading(false); setInvoiceError(itemsError.message); return; }
+    }
     setInvoiceLoading(false);
-    if (error) { setInvoiceError(error.message); return; }
-    setInvoiceForm({ amount: "", currency: "USD" });
+    setInvoiceItems([]);
+    setManualAmount("");
+    setInvoiceDiscount("0");
+    setInvoiceTaxPercent("0");
     router.refresh();
   }
 
@@ -740,22 +782,60 @@ export default function PatientFileClient({
               <div className="card mb-5">
                 <h2 className="section-title" style={{ marginBottom: 12 }}>إضافة فاتورة</h2>
                 <form onSubmit={addInvoice}>
-                  <div className="grid-2">
+                  <label>العملة</label>
+                  <select value={invoiceCurrency} onChange={(e) => setInvoiceCurrency(e.target.value)} style={{ maxWidth: 200 }}>
+                    <option value="USD">دولار أمريكي ($)</option>
+                    <option value="LBP">ليرة لبنانية (ل.ل)</option>
+                  </select>
+
+                  {services.length > 0 && (
+                    <>
+                      <label style={{ marginTop: 12 }}>إضافة خدمة من القائمة</label>
+                      <select onChange={(e) => { const svc = services.find((s) => s.id === e.target.value); if (svc) addInvoiceServiceItem(svc); e.target.value = ""; }} defaultValue="">
+                        <option value="" disabled>اختر خدمة...</option>
+                        {services.map((s) => (<option key={s.id} value={s.id}>{s.name} — {s.price} {s.currency}</option>))}
+                      </select>
+                    </>
+                  )}
+                  <button type="button" className="btn-danger-sm" style={{ marginTop: 8, background: "var(--brand-50)", color: "var(--brand-700)" }} onClick={() => addInvoiceServiceItem()}>
+                    + بند مخصص
+                  </button>
+
+                  {invoiceItems.map((it, idx) => (
+                    <div key={idx} className="card" style={{ marginTop: 10, padding: 10 }}>
+                      <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <input placeholder="الوصف" value={it.description} onChange={(e) => updateInvoiceItem(idx, "description", e.target.value)} style={{ flex: 2 }} />
+                        <input type="number" min="0" step="1" placeholder="كمية" value={it.quantity} onChange={(e) => updateInvoiceItem(idx, "quantity", e.target.value)} style={{ flex: 1 }} />
+                        <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" value={it.unitPrice} onChange={(e) => updateInvoiceItem(idx, "unitPrice", e.target.value)} style={{ flex: 1 }} />
+                        <button type="button" className="btn-danger-sm" onClick={() => removeInvoiceItem(idx)}>حذف</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {invoiceItems.length === 0 && (
+                    <>
+                      <label style={{ marginTop: 12 }}>أو أدخل مبلغاً إجمالياً مباشرة</label>
+                      <input type="number" min="0" step="0.01" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} />
+                    </>
+                  )}
+
+                  <div className="grid-2" style={{ marginTop: 12 }}>
                     <div>
-                      <label>المبلغ</label>
-                      <input required type="number" min="0" step="0.01" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: e.target.value })} />
+                      <label>الخصم</label>
+                      <input type="number" min="0" step="0.01" value={invoiceDiscount} onChange={(e) => setInvoiceDiscount(e.target.value)} />
                     </div>
                     <div>
-                      <label>العملة</label>
-                      <select value={invoiceForm.currency} onChange={(e) => setInvoiceForm({ ...invoiceForm, currency: e.target.value })}>
-                        <option value="USD">دولار أمريكي ($)</option>
-                        <option value="LBP">ليرة لبنانية (ل.ل)</option>
-                      </select>
+                      <label>الضريبة (%)</label>
+                      <input type="number" min="0" step="0.1" value={invoiceTaxPercent} onChange={(e) => setInvoiceTaxPercent(e.target.value)} />
                     </div>
                   </div>
-                  {invoiceForm.currency === "LBP" && invoiceForm.amount && (
-                    <p className="subtitle" style={{ marginTop: 4 }}>
-                      ≈ ${(Number(invoiceForm.amount) / exchangeRate).toFixed(2)} بسعر صرف {exchangeRate.toLocaleString("en-US")}
+
+                  <p className="subtitle" style={{ marginTop: 4, fontWeight: 600 }}>
+                    الإجمالي: {fmtMoney(invoiceTotal, invoiceCurrency)}
+                  </p>
+                  {invoiceCurrency === "LBP" && invoiceTotal > 0 && (
+                    <p className="subtitle" style={{ marginTop: 0 }}>
+                      ≈ ${(invoiceTotal / exchangeRate).toFixed(2)} بسعر صرف {exchangeRate.toLocaleString("en-US")}
                     </p>
                   )}
                   {invoiceError && <p className="error">{invoiceError}</p>}
@@ -780,6 +860,7 @@ export default function PatientFileClient({
                       )}
                     </div>
                     <span className={`badge ${INVOICE_STATUS_CLASS[i.status] ?? ""}`}>{INVOICE_STATUS_LABEL[i.status] ?? i.status}</span>
+                    <a className="link" href={`/dashboard/invoices/${i.id}/print`} target="_blank" rel="noreferrer">🖨 طباعة</a>
                     {isFrontDesk && (
                       <button
                         onClick={() => deleteInvoice(i.id)}

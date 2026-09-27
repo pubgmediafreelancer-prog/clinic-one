@@ -34,12 +34,19 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(300);
 
+  const { data: services } = await supabase
+    .from("services")
+    .select("id, name, category, price, currency, active")
+    .eq("clinic_id", profile.clinic_id)
+    .order("name");
+
   return (
     <DashboardClient
       profile={profile as any}
       appointments={(appointments as any) ?? []}
       doctors={(doctors as any) ?? []}
       patients={(patients as any) ?? []}
+      services={(services as any) ?? []}
     />
   );
 }

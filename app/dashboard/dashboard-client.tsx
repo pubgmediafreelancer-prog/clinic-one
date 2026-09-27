@@ -23,7 +23,7 @@ const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
   { key: "obgyn", label: "النساء والولادة", icon: "🤰" },
 ];
 
-export default function DashboardClient({ profile, appointments, doctors, patients }: { profile: any; appointments: any[]; doctors: any[]; patients: any[] }) {
+export default function DashboardClient({ profile, appointments, doctors, patients, services }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const clinic = profile.clinics ?? {};
@@ -50,6 +50,43 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setSettingsMsg("تم الحفظ بنجاح");
     router.refresh();
   }
+  const [serviceForm, setServiceForm] = useState({ name: "", category: "", price: "", currency: "USD" });
+  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [serviceBusyId, setServiceBusyId] = useState<string | null>(null);
+
+  async function addService(e: React.FormEvent) {
+    e.preventDefault();
+    setServiceError(null);
+    setServiceLoading(true);
+    const { error } = await supabase.from("services").insert({
+      clinic_id: profile.clinic_id,
+      name: serviceForm.name,
+      category: serviceForm.category || null,
+      price: Number(serviceForm.price) || 0,
+      currency: serviceForm.currency,
+    });
+    setServiceLoading(false);
+    if (error) { setServiceError(error.message); return; }
+    setServiceForm({ name: "", category: "", price: "", currency: "USD" });
+    router.refresh();
+  }
+
+  async function toggleServiceActive(id: string, active: boolean) {
+    setServiceBusyId(id);
+    await supabase.from("services").update({ active: !active }).eq("id", id);
+    setServiceBusyId(null);
+    router.refresh();
+  }
+
+  async function deleteService(id: string) {
+    if (!confirm("حذف هذه الخدمة؟")) return;
+    setServiceBusyId(id);
+    await supabase.from("services").delete().eq("id", id);
+    setServiceBusyId(null);
+    router.refresh();
+  }
+
   const [inviteRole, setInviteRole] = useState("doctor");
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -180,7 +217,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     (!apptDoctorFilter || a.doctor_id === apptDoctorFilter) && inRange(a.scheduled_at, apptRangeFilter)
   );
 
-  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "invite" | "settings">("overview");
+  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "invite" | "settings">("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   function setTab(next: typeof tab) {
     setTabRaw(next);
@@ -245,6 +282,9 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           )}
           {activeSpecialties.includes("obgyn") && (
             <a className="sidebar-link" href="/dashboard/specialty/obgyn" onClick={() => setMobileMenuOpen(false)}>🤰 النساء والولادة</a>
+          )}
+          {(profile.role === "admin" || profile.role === "secretary") && (
+            <button className={`sidebar-link ${tab === "services" ? "active" : ""}`} onClick={() => setTab("services")}>💰 الخدمات والأسعار</button>
           )}
           {profile.role === "admin" && (
             <>
@@ -520,6 +560,59 @@ export default function DashboardClient({ profile, appointments, doctors, patien
               </a>
             ))}
           </div>
+        )}
+
+        {tab === "services" && (
+          <>
+            <div className="card mb-5">
+              <h2 className="section-title" style={{ marginBottom: 12 }}>إضافة خدمة</h2>
+              <form onSubmit={addService}>
+                <div className="grid-2">
+                  <div>
+                    <label>اسم الخدمة</label>
+                    <input required value={serviceForm.name} onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })} placeholder="مثال: كشف عام" />
+                  </div>
+                  <div>
+                    <label>الفئة (اختياري)</label>
+                    <input value={serviceForm.category} onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })} placeholder="مثال: أسنان" />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div>
+                    <label>السعر</label>
+                    <input required type="number" min="0" step="0.01" value={serviceForm.price} onChange={(e) => setServiceForm({ ...serviceForm, price: e.target.value })} />
+                  </div>
+                  <div>
+                    <label>العملة</label>
+                    <select value={serviceForm.currency} onChange={(e) => setServiceForm({ ...serviceForm, currency: e.target.value })}>
+                      <option value="USD">دولار أمريكي ($)</option>
+                      <option value="LBP">ليرة لبنانية (ل.ل)</option>
+                    </select>
+                  </div>
+                </div>
+                {serviceError && <p className="error">{serviceError}</p>}
+                <button className="primary" disabled={serviceLoading}>{serviceLoading ? "..." : "إضافة خدمة"}</button>
+              </form>
+            </div>
+
+            <div className="card">
+              <h2 className="section-title" style={{ marginBottom: 8 }}>الخدمات والأسعار</h2>
+              {services.length === 0 && <div className="empty-state">لا يوجد خدمات بعد</div>}
+              {services.map((s) => (
+                <div key={s.id} className="row list-item" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>{s.name}{s.category ? ` (${s.category})` : ""}</div>
+                    <div className="subtitle" style={{ margin: 0 }}>{s.price} {s.currency === "LBP" ? "ل.ل" : "$"}</div>
+                  </div>
+                  <span className={`badge ${s.active ? "badge-success" : "badge-muted"}`}>{s.active ? "مفعّلة" : "معطّلة"}</span>
+                  <button className="btn-sm" disabled={serviceBusyId === s.id} onClick={() => toggleServiceActive(s.id, s.active)}>
+                    {s.active ? "تعطيل" : "تفعيل"}
+                  </button>
+                  <button className="btn-danger-sm" disabled={serviceBusyId === s.id} onClick={() => deleteService(s.id)}>حذف</button>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {tab === "settings" && profile.role === "admin" && (
