@@ -146,7 +146,12 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   const todaysCount = appointments.filter((a) => new Date(a.scheduled_at).toDateString() === todayStr).length;
   const pendingCount = appointments.filter((a) => a.status === "wait" || a.status === "ok").length;
 
-  const [tab, setTab] = useState<"overview" | "appointments" | "queue" | "patients" | "invite" | "settings">("overview");
+  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "invite" | "settings">("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  function setTab(next: typeof tab) {
+    setTabRaw(next);
+    setMobileMenuOpen(false);
+  }
 
   const queueList = appointments
     .filter((a) => QUEUE_STATUSES.includes(a.status) && new Date(a.scheduled_at).toDateString() === todayStr)
@@ -154,10 +159,20 @@ export default function DashboardClient({ profile, appointments, doctors, patien
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <span className="sidebar-brand-logo">🩺</span>
-          كلينك ون
+      <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
+        <div className="sidebar-topbar">
+          <div className="sidebar-brand">
+            <span className="sidebar-brand-logo">🩺</span>
+            كلينك ون
+          </div>
+          <button
+            className="sidebar-menu-toggle"
+            aria-label="فتح قائمة التنقل"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((v) => !v)}
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
         </div>
 
         <div className="sidebar-clinic">
@@ -172,16 +187,16 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           <button className={`sidebar-link ${tab === "queue" ? "active" : ""}`} onClick={() => setTab("queue")}>⏱ غرفة الانتظار {queueList.length > 0 ? `(${queueList.length})` : ""}</button>
           <button className={`sidebar-link ${tab === "patients" ? "active" : ""}`} onClick={() => setTab("patients")}>🧑‍🤝‍🧑 المرضى</button>
           {activeSpecialties.includes("dental") && (
-            <a className="sidebar-link" href="/dashboard/specialty/dental">🦷 الأسنان</a>
+            <a className="sidebar-link" href="/dashboard/specialty/dental" onClick={() => setMobileMenuOpen(false)}>🦷 الأسنان</a>
           )}
           {activeSpecialties.includes("pediatrics") && (
-            <a className="sidebar-link" href="/dashboard/specialty/pediatrics">👶 الأطفال</a>
+            <a className="sidebar-link" href="/dashboard/specialty/pediatrics" onClick={() => setMobileMenuOpen(false)}>👶 الأطفال</a>
           )}
           {activeSpecialties.includes("dermatology") && (
-            <a className="sidebar-link" href="/dashboard/specialty/dermatology">🧴 الجلدية</a>
+            <a className="sidebar-link" href="/dashboard/specialty/dermatology" onClick={() => setMobileMenuOpen(false)}>🧴 الجلدية</a>
           )}
           {activeSpecialties.includes("obgyn") && (
-            <a className="sidebar-link" href="/dashboard/specialty/obgyn">🤰 النساء والولادة</a>
+            <a className="sidebar-link" href="/dashboard/specialty/obgyn" onClick={() => setMobileMenuOpen(false)}>🤰 النساء والولادة</a>
           )}
           {profile.role === "admin" && (
             <>
@@ -195,6 +210,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           <button onClick={signOut} className="sidebar-signout">🚪 تسجيل الخروج</button>
         </div>
       </aside>
+      {mobileMenuOpen && <div className="sidebar-scrim" onClick={() => setMobileMenuOpen(false)} />}
 
       <main className="app-main">
         <div className="page-head">
