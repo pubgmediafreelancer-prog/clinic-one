@@ -16,9 +16,40 @@ const QUEUE_NEXT: Record<string, string> = { wait: "in_consultation", in_consult
 const QUEUE_NEXT_LABEL: Record<string, string> = { wait: "بدء الاستشارة", in_consultation: "إنهاء الاستشارة" };
 const ROLE_LABEL: Record<string, string> = { admin: "إدارة", doctor: "دكتور", secretary: "سكرتيرة" };
 
+const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
+  { key: "dental", label: "الأسنان", icon: "🦷" },
+  { key: "pediatrics", label: "الأطفال", icon: "👶" },
+  { key: "dermatology", label: "الجلدية والتجميل", icon: "🧴" },
+  { key: "obgyn", label: "النساء والولادة", icon: "🤰" },
+];
+
 export default function DashboardClient({ profile, appointments, doctors, patients }: { profile: any; appointments: any[]; doctors: any[]; patients: any[] }) {
   const router = useRouter();
   const supabase = createClient();
+  const clinic = profile.clinics ?? {};
+  const activeSpecialties: string[] = clinic.specialties ?? ["general"];
+
+  const [specialtiesForm, setSpecialtiesForm] = useState<string[]>(activeSpecialties.filter((s) => s !== "general"));
+  const [exchangeRateForm, setExchangeRateForm] = useState(String(clinic.exchange_rate ?? 89000));
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
+
+  function toggleSpecialty(key: string) {
+    setSpecialtiesForm((prev) => prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]);
+  }
+
+  async function saveSettings() {
+    setSettingsSaving(true);
+    setSettingsMsg(null);
+    const { error } = await supabase.from("clinics").update({
+      specialties: ["general", ...specialtiesForm],
+      exchange_rate: Number(exchangeRateForm) || 89000,
+    }).eq("id", clinic.id);
+    setSettingsSaving(false);
+    if (error) { setSettingsMsg(error.message); return; }
+    setSettingsMsg("تم الحفظ بنجاح");
+    router.refresh();
+  }
   const [inviteRole, setInviteRole] = useState("doctor");
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -115,7 +146,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   const todaysCount = appointments.filter((a) => new Date(a.scheduled_at).toDateString() === todayStr).length;
   const pendingCount = appointments.filter((a) => a.status === "wait" || a.status === "ok").length;
 
-  const [tab, setTab] = useState<"overview" | "appointments" | "queue" | "patients" | "invite">("overview");
+  const [tab, setTab] = useState<"overview" | "appointments" | "queue" | "patients" | "invite" | "settings">("overview");
 
   const queueList = appointments
     .filter((a) => QUEUE_STATUSES.includes(a.status) && new Date(a.scheduled_at).toDateString() === todayStr)
@@ -140,8 +171,23 @@ export default function DashboardClient({ profile, appointments, doctors, patien
           <button className={`sidebar-link ${tab === "appointments" ? "active" : ""}`} onClick={() => setTab("appointments")}>📅 المواعيد</button>
           <button className={`sidebar-link ${tab === "queue" ? "active" : ""}`} onClick={() => setTab("queue")}>⏱ غرفة الانتظار {queueList.length > 0 ? `(${queueList.length})` : ""}</button>
           <button className={`sidebar-link ${tab === "patients" ? "active" : ""}`} onClick={() => setTab("patients")}>🧑‍🤝‍🧑 المرضى</button>
+          {activeSpecialties.includes("dental") && (
+            <a className="sidebar-link" href="/dashboard/specialty/dental">🦷 الأسنان</a>
+          )}
+          {activeSpecialties.includes("pediatrics") && (
+            <a className="sidebar-link" href="/dashboard/specialty/pediatrics">👶 الأطفال</a>
+          )}
+          {activeSpecialties.includes("dermatology") && (
+            <a className="sidebar-link" href="/dashboard/specialty/dermatology">🧴 الجلدية</a>
+          )}
+          {activeSpecialties.includes("obgyn") && (
+            <a className="sidebar-link" href="/dashboard/specialty/obgyn">🤰 النساء والولادة</a>
+          )}
           {profile.role === "admin" && (
-            <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
+            <>
+              <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
+              <button className={`sidebar-link ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>⚙️ إعدادات العيادة</button>
+            </>
           )}
         </nav>
 
@@ -329,6 +375,39 @@ export default function DashboardClient({ profile, appointments, doctors, patien
                 <span className="subtitle" style={{ margin: 0 }}>{p.phone}</span>
               </a>
             ))}
+          </div>
+        )}
+
+        {tab === "settings" && profile.role === "admin" && (
+          <div className="card">
+            <h2 className="section-title" style={{ marginBottom: 12 }}>إعدادات العيادة</h2>
+
+            <label>سعر الصرف (ل.ل مقابل 1$)</label>
+            <input type="number" min="0" value={exchangeRateForm} onChange={(e) => setExchangeRateForm(e.target.value)} />
+
+            <label style={{ marginTop: 16, display: "block" }}>التخصصات المفعّلة</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+              {ALL_SPECIALTIES.map((s) => (
+                <label key={s.key} className="badge" style={{
+                  cursor: "pointer",
+                  background: specialtiesForm.includes(s.key) ? "var(--brand-500)" : undefined,
+                  color: specialtiesForm.includes(s.key) ? "#fff" : undefined,
+                }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: "auto", marginInlineEnd: 6 }}
+                    checked={specialtiesForm.includes(s.key)}
+                    onChange={() => toggleSpecialty(s.key)}
+                  />
+                  {s.icon} {s.label}
+                </label>
+              ))}
+            </div>
+
+            {settingsMsg && <p className="success-msg" style={{ marginTop: 12 }}>{settingsMsg}</p>}
+            <button className="primary" style={{ marginTop: 16, width: "auto" }} disabled={settingsSaving} onClick={saveSettings}>
+              {settingsSaving ? "..." : "حفظ الإعدادات"}
+            </button>
           </div>
         )}
 
