@@ -15,6 +15,11 @@ const QUEUE_STATUSES = ["wait", "in_consultation"];
 const QUEUE_NEXT: Record<string, string> = { wait: "in_consultation", in_consultation: "completed" };
 const QUEUE_NEXT_LABEL: Record<string, string> = { wait: "بدء الاستشارة", in_consultation: "إنهاء الاستشارة" };
 const ROLE_LABEL: Record<string, string> = { admin: "إدارة", doctor: "دكتور", secretary: "سكرتيرة" };
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  created_patient: "أضاف مريضاً", updated_patient: "عدّل بيانات مريض", created_visit: "سجّل زيارة",
+  created_appointment: "حجز موعداً", changed_appointment_status: "غيّر حالة موعد", created_invoice: "أنشأ فاتورة",
+  recorded_payment: "سجّل دفعة", created_prescription: "أنشأ وصفة طبية", changed_staff_role: "غيّر دور موظف",
+};
 
 const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
   { key: "dental", label: "الأسنان", icon: "🦷" },
@@ -23,7 +28,7 @@ const ALL_SPECIALTIES: { key: string; label: string; icon: string }[] = [
   { key: "obgyn", label: "النساء والولادة", icon: "🤰" },
 ];
 
-export default function DashboardClient({ profile, appointments, doctors, patients, services, invoices, staff }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[]; invoices: any[]; staff: any[] }) {
+export default function DashboardClient({ profile, appointments, doctors, patients, services, invoices, staff, auditLog }: { profile: any; appointments: any[]; doctors: any[]; patients: any[]; services: any[]; invoices: any[]; staff: any[]; auditLog: any[] }) {
   const router = useRouter();
   const supabase = createClient();
   const clinic = profile.clinics ?? {};
@@ -279,7 +284,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     (!apptDoctorFilter || a.doctor_id === apptDoctorFilter) && inRange(a.scheduled_at, apptRangeFilter)
   );
 
-  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "reports" | "staff" | "invite" | "settings">("overview");
+  const [tab, setTabRaw] = useState<"overview" | "appointments" | "queue" | "patients" | "services" | "reports" | "staff" | "audit" | "invite" | "settings">("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   function setTab(next: typeof tab) {
     setTabRaw(next);
@@ -352,6 +357,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
             <>
               <button className={`sidebar-link ${tab === "reports" ? "active" : ""}`} onClick={() => setTab("reports")}>📈 التقارير</button>
               <button className={`sidebar-link ${tab === "staff" ? "active" : ""}`} onClick={() => setTab("staff")}>🧑‍⚕️ الأطباء والموظفون</button>
+              <button className={`sidebar-link ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>📜 سجل النشاط</button>
               <button className={`sidebar-link ${tab === "invite" ? "active" : ""}`} onClick={() => setTab("invite")}>➕ دعوة عضو</button>
               <button className={`sidebar-link ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>⚙️ إعدادات العيادة</button>
             </>
@@ -754,6 +760,23 @@ export default function DashboardClient({ profile, appointments, doctors, patien
                   <option value="doctor">دكتور</option>
                   <option value="secretary">سكرتيرة</option>
                 </select>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "audit" && profile.role === "admin" && (
+          <div className="card">
+            <h2 className="section-title" style={{ marginBottom: 8 }}>سجل النشاط (Audit Log)</h2>
+            {auditLog.length === 0 && <div className="empty-state">لا يوجد نشاط مسجل بعد</div>}
+            {auditLog.map((a) => (
+              <div key={a.id} className="list-item">
+                <div className="subtitle" style={{ margin: 0 }}>
+                  {new Date(a.created_at).toLocaleString("ar-LB")} — {a.actor_name ?? "النظام"}
+                </div>
+                <div>
+                  <strong>{AUDIT_ACTION_LABEL[a.action] ?? a.action}</strong>{a.details ? ` — ${a.details}` : ""}
+                </div>
               </div>
             ))}
           </div>
