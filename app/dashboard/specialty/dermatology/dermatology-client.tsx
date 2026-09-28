@@ -9,7 +9,7 @@ export default function DermatologyClient({ profile, patients }: { profile: any;
   const [patientId, setPatientId] = useState(patients[0]?.id ?? "");
   const [treatments, setTreatments] = useState<any[]>([]);
   const [photosByTreatment, setPhotosByTreatment] = useState<Record<string, any[]>>({});
-  const [form, setForm] = useState({ type: "", view: "front", x: "50", y: "50", notes: "" });
+  const [form, setForm] = useState({ type: "", view: "front", x: "50", y: "50", notes: "", diagnosis: "", symptoms: "", medication: "" });
   const [photoForm, setPhotoForm] = useState<Record<string, { phase: string; url: string }>>({});
   const [loading, setLoading] = useState(false);
 
@@ -38,8 +38,11 @@ export default function DermatologyClient({ profile, patients }: { profile: any;
       body_map_x: Number(form.x),
       body_map_y: Number(form.y),
       notes: form.notes || null,
+      diagnosis: form.diagnosis || null,
+      symptoms: form.symptoms || null,
+      medication: form.medication || null,
     });
-    setForm({ type: "", view: "front", x: "50", y: "50", notes: "" });
+    setForm({ type: "", view: "front", x: "50", y: "50", notes: "", diagnosis: "", symptoms: "", medication: "" });
     load(patientId);
   }
 
@@ -84,9 +87,15 @@ export default function DermatologyClient({ profile, patients }: { profile: any;
                 <div><label>موضع X% (يسار→يمين)</label><input type="number" min="0" max="100" value={form.x} onChange={(e) => setForm({ ...form, x: e.target.value })} /></div>
                 <div><label>موضع Y% (أعلى→أسفل)</label><input type="number" min="0" max="100" value={form.y} onChange={(e) => setForm({ ...form, y: e.target.value })} /></div>
               </div>
-              <label>ملاحظات</label>
+              <label>التشخيص (Diagnosis)</label>
+              <input value={form.diagnosis} onChange={(e) => setForm({ ...form, diagnosis: e.target.value })} />
+              <label>الأعراض (Symptoms)</label>
+              <input value={form.symptoms} onChange={(e) => setForm({ ...form, symptoms: e.target.value })} />
+              <label>الأدوية (Medication)</label>
+              <input value={form.medication} onChange={(e) => setForm({ ...form, medication: e.target.value })} />
+              <label>ملاحظات الطبيب</label>
               <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              <button className="primary" style={{ marginTop: 10, width: "auto" }} onClick={addTreatment}>حفظ العلاج</button>
+              <button className="primary" style={{ marginTop: 10, width: "auto" }} onClick={addTreatment}>حفظ الحالة الجلدية</button>
             </div>
 
             <div className="card">
@@ -94,37 +103,47 @@ export default function DermatologyClient({ profile, patients }: { profile: any;
               {treatments.length === 0 && <div className="empty-state">لا يوجد علاجات بعد</div>}
               {treatments.map((t) => {
                 const photos = photosByTreatment[t.id] ?? [];
-                const pre = photos.filter((p) => p.phase === "pre");
-                const post = photos.filter((p) => p.phase === "post");
+                const initial = photos.filter((p) => p.phase === "pre" || p.phase === "initial");
+                const followups = photos.filter((p) => p.phase === "post" || p.phase === "followup");
                 return (
                   <div key={t.id} className="card" style={{ marginBottom: 12, padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{t.treatment_type} — {VIEW_LABEL[t.body_map_view] ?? t.body_map_view} ({t.body_map_x}%, {t.body_map_y}%)</div>
-                    <div className="subtitle" style={{ margin: 0 }}>{new Date(t.performed_at).toLocaleDateString("ar-LB")}{t.notes ? ` — ${t.notes}` : ""}</div>
+                    <div className="subtitle" style={{ margin: 0 }}>{new Date(t.performed_at).toLocaleDateString("ar-LB")}</div>
+                    {t.diagnosis && <div style={{ marginTop: 6 }}><strong>التشخيص:</strong> {t.diagnosis}</div>}
+                    {t.symptoms && <div className="subtitle" style={{ margin: 0 }}><strong>الأعراض:</strong> {t.symptoms}</div>}
+                    {t.medication && <div className="subtitle" style={{ margin: 0 }}><strong>الأدوية:</strong> {t.medication}</div>}
+                    {t.notes && <div className="subtitle" style={{ margin: 0 }}>{t.notes}</div>}
 
-                    <div className="grid-2" style={{ marginTop: 10 }}>
+                    <h3 style={{ fontSize: "0.9rem", marginTop: 12, marginBottom: 6 }}>Timeline: Initial → Follow-up → Follow-up</h3>
+                    <div className="grid-2" style={{ marginTop: 4 }}>
                       <div>
-                        <div className="subtitle" style={{ margin: 0, fontWeight: 600 }}>قبل ({pre.length})</div>
-                        {pre.map((p) => <img key={p.id} src={p.file_path} alt="before" style={{ width: "100%", borderRadius: 8, marginTop: 4 }} />)}
+                        <div className="subtitle" style={{ margin: 0, fontWeight: 600 }}>الحالة الأولية ({initial.length})</div>
+                        {initial.map((p) => <img key={p.id} src={p.file_path} alt="initial" style={{ width: "100%", borderRadius: 8, marginTop: 4 }} />)}
                       </div>
                       <div>
-                        <div className="subtitle" style={{ margin: 0, fontWeight: 600 }}>بعد ({post.length})</div>
-                        {post.map((p) => <img key={p.id} src={p.file_path} alt="after" style={{ width: "100%", borderRadius: 8, marginTop: 4 }} />)}
+                        <div className="subtitle" style={{ margin: 0, fontWeight: 600 }}>المتابعات ({followups.length})</div>
+                        {followups.map((p) => (
+                          <div key={p.id} style={{ marginTop: 4 }}>
+                            <img src={p.file_path} alt="follow-up" style={{ width: "100%", borderRadius: 8 }} />
+                            <div className="subtitle" style={{ margin: 0 }}>{new Date(p.taken_at).toLocaleDateString("ar-LB")}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
                     <div className="row" style={{ display: "flex", gap: 8, marginTop: 10 }}>
                       <select
-                        value={photoForm[t.id]?.phase ?? "pre"}
+                        value={photoForm[t.id]?.phase ?? "initial"}
                         onChange={(e) => setPhotoForm({ ...photoForm, [t.id]: { phase: e.target.value, url: photoForm[t.id]?.url ?? "" } })}
                         style={{ width: "auto" }}
                       >
-                        <option value="pre">قبل</option>
-                        <option value="post">بعد</option>
+                        <option value="initial">الحالة الأولية (Initial)</option>
+                        <option value="followup">متابعة (Follow-up)</option>
                       </select>
                       <input
                         placeholder="رابط الصورة"
                         value={photoForm[t.id]?.url ?? ""}
-                        onChange={(e) => setPhotoForm({ ...photoForm, [t.id]: { phase: photoForm[t.id]?.phase ?? "pre", url: e.target.value } })}
+                        onChange={(e) => setPhotoForm({ ...photoForm, [t.id]: { phase: photoForm[t.id]?.phase ?? "initial", url: e.target.value } })}
                         style={{ flex: 1 }}
                       />
                       <button className="btn-sm" onClick={() => addPhoto(t.id)}>إضافة صورة</button>
