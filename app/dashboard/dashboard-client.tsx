@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -291,6 +291,22 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     setMobileMenuOpen(false);
   }
 
+  const NOTIF_TYPES = ["created_appointment", "changed_appointment_status", "recorded_payment", "created_patient"];
+  const notifItems = auditLog.filter((a) => NOTIF_TYPES.includes(a.action)).slice(0, 20);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [lastSeenNotif, setLastSeenNotif] = useState<string | null>(null);
+  useEffect(() => {
+    try { setLastSeenNotif(localStorage.getItem("clinic_one_last_seen_notif")); } catch {}
+  }, []);
+  const unreadCount = lastSeenNotif ? notifItems.filter((n) => n.created_at > lastSeenNotif).length : notifItems.length;
+  function openNotifications() {
+    setNotifOpen((v) => !v);
+    if (notifItems.length > 0) {
+      try { localStorage.setItem("clinic_one_last_seen_notif", notifItems[0].created_at); } catch {}
+      setLastSeenNotif(notifItems[0].created_at);
+    }
+  }
+
   const [searchQuery, setSearchQuery] = useState("");
   const searchResults = (() => {
     const q = searchQuery.trim().toLowerCase();
@@ -371,10 +387,51 @@ export default function DashboardClient({ profile, appointments, doctors, patien
       {mobileMenuOpen && <div className="sidebar-scrim" onClick={() => setMobileMenuOpen(false)} />}
 
       <main className="app-main">
-        <div className="page-head">
-          <div className="eyebrow">لوحة التحكم</div>
-          <h1>أهلاً، {profile.full_name.split(" ")[0]} 👋</h1>
-          <p className="subtitle" style={{ margin: 0 }}>هذا ملخص عيادتك اليوم</p>
+        <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-3)" }}>
+          <div>
+            <div className="eyebrow">لوحة التحكم</div>
+            <h1>أهلاً، {profile.full_name.split(" ")[0]} 👋</h1>
+            <p className="subtitle" style={{ margin: 0 }}>هذا ملخص عيادتك اليوم</p>
+          </div>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={openNotifications}
+              className="btn-icon"
+              style={{ position: "relative", fontSize: "1.25rem", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", width: 44, height: 44, cursor: "pointer" }}
+              aria-label="الإشعارات"
+            >
+              🔔
+              {unreadCount > 0 && (
+                <span style={{
+                  position: "absolute", top: -4, insetInlineEnd: -4, background: "var(--danger, #dc2626)",
+                  color: "#fff", borderRadius: "999px", fontSize: 11, fontWeight: 700,
+                  minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
+                }}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {notifOpen && (
+              <div className="card" style={{
+                position: "absolute", top: "calc(100% + 6px)", insetInlineEnd: 0, width: 340,
+                maxWidth: "calc(100vw - 32px)", zIndex: 60, padding: 8, maxHeight: 400, overflowY: "auto",
+              }}>
+                <div style={{ fontWeight: 700, padding: "4px 8px 8px" }}>الإشعارات</div>
+                {notifItems.length === 0 && <div className="empty-state" style={{ padding: 12 }}>لا إشعارات حالياً</div>}
+                {notifItems.map((n) => (
+                  <div key={n.id} className="list-item" style={{ display: "block" }}>
+                    <div style={{ fontSize: 14 }}>
+                      <strong>{n.actor_name}</strong> {AUDIT_ACTION_LABEL[n.action] ?? n.action}
+                      {n.details ? ` — ${n.details}` : ""}
+                    </div>
+                    <div className="subtitle" style={{ margin: 0, fontSize: 12 }}>
+                      {new Date(n.created_at).toLocaleString("ar-LB")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ position: "relative", marginBottom: "var(--space-5)" }}>
