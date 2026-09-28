@@ -348,6 +348,21 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     .filter((a) => QUEUE_STATUSES.includes(a.status) && new Date(a.scheduled_at).toDateString() === todayStr)
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
+  const todaysSchedule = appointments
+    .filter((a) => new Date(a.scheduled_at).toDateString() === todayStr)
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+
+  const recentPatients = [...patients]
+    .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+    .slice(0, 5);
+
+  const todaysInvoices = invoices.filter((i) => new Date(i.created_at).toDateString() === todayStr);
+  const todaysRevenueUsd = todaysInvoices.reduce((s, i) => {
+    const rate = Number(i.exchange_rate_used) || exchangeRate;
+    const paid = Number(i.paid_amount) || 0;
+    return s + (i.currency === "LBP" ? paid / rate : paid);
+  }, 0);
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
@@ -489,6 +504,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
 
         {tab === "overview" && (
           <>
+            <h2 className="section-title" style={{ marginBottom: 8 }}>نظرة اليوم</h2>
             <div className="stat-grid">
               <div className="stat-card">
                 <div className="stat-label">مواعيد اليوم</div>
@@ -496,33 +512,75 @@ export default function DashboardClient({ profile, appointments, doctors, patien
                 <div className="stat-sub">من إجمالي {appointments.length} موعد</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">مواعيد بانتظار التأكيد</div>
-                <div className="stat-value">{pendingCount}</div>
-                <div className="stat-sub">تحتاج متابعة</div>
+                <div className="stat-label">في غرفة الانتظار</div>
+                <div className="stat-value">{queueList.length}</div>
+                <div className="stat-sub">بانتظار / قيد الاستشارة</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">إجمالي المرضى</div>
                 <div className="stat-value">{patients.length}</div>
                 <div className="stat-sub">مسجّلين بالعيادة</div>
               </div>
+              <div className="stat-card">
+                <div className="stat-label">إيرادات اليوم (تقريبي $)</div>
+                <div className="stat-value" style={{ color: "var(--brand-700)" }}>${todaysRevenueUsd.toFixed(2)}</div>
+                <div className="stat-sub">{todaysInvoices.length} فاتورة اليوم</div>
+              </div>
             </div>
 
             <div className="card">
               <div className="row" style={{ marginBottom: 8 }}>
-                <h2 className="section-title">أحدث المواعيد</h2>
+                <h2 className="section-title">📅 جدول اليوم</h2>
                 <button className="btn-sm" onClick={() => setTab("appointments")}>عرض الكل ←</button>
               </div>
-              {appointments.length === 0 && <div className="empty-state">لا يوجد مواعيد بعد</div>}
-              {appointments.slice(0, 5).map((a) => (
+              {todaysSchedule.length === 0 && <div className="empty-state">لا يوجد مواعيد اليوم</div>}
+              {todaysSchedule.slice(0, 6).map((a) => (
                 <div key={a.id} className="list-item row">
                   <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit" }}>
                     <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
                     <div className="subtitle" style={{ margin: 0 }}>
-                      {new Date(a.scheduled_at).toLocaleString("ar-LB")} — {a.visit_type}
+                      {new Date(a.scheduled_at).toLocaleTimeString("ar-LB")} — {a.visit_type} — د. {a.profiles?.full_name ?? "—"}
                     </div>
                   </a>
                   <span className={`badge ${STATUS_BADGE_CLASS[a.status]}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
                 </div>
+              ))}
+            </div>
+
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <h2 className="section-title">⏳ غرفة الانتظار</h2>
+                <button className="btn-sm" onClick={() => setTab("queue")}>فتح غرفة الانتظار ←</button>
+              </div>
+              {queueList.length === 0 && <div className="empty-state">غرفة الانتظار فارغة حالياً</div>}
+              {queueList.slice(0, 6).map((a) => (
+                <div key={a.id} className="list-item row">
+                  <a href={`/dashboard/patients/${a.patient_id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                    <div style={{ fontWeight: 600 }}>{a.patients?.full_name}</div>
+                    <div className="subtitle" style={{ margin: 0 }}>
+                      {new Date(a.scheduled_at).toLocaleTimeString("ar-LB")} — د. {a.profiles?.full_name ?? "—"}
+                    </div>
+                  </a>
+                  <span className={`badge ${STATUS_BADGE_CLASS[a.status]}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <h2 className="section-title">🧑‍🤝‍🧑 مرضى جدد مؤخراً</h2>
+                <button className="btn-sm" onClick={() => setTab("patients")}>عرض كل المرضى ←</button>
+              </div>
+              {recentPatients.length === 0 && <div className="empty-state">لا يوجد مرضى بعد</div>}
+              {recentPatients.map((p) => (
+                <a key={p.id} href={`/dashboard/patients/${p.id}`} className="list-item row" style={{ textDecoration: "none", color: "inherit" }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{p.full_name}</div>
+                    <div className="subtitle" style={{ margin: 0 }}>
+                      {p.phone}{p.file_number ? ` — ملف ${p.file_number}` : ""}
+                    </div>
+                  </div>
+                </a>
               ))}
             </div>
           </>
