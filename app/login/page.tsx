@@ -55,6 +55,9 @@ export default function LoginPage() {
             <div style={{ textAlign: "center", marginTop: 20 }}>
               <Link href="/signup" className="link">ما عندك عيادة؟ أنشئ حساب جديد ←</Link>
             </div>
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <Link href="/" className="link">← رجوع للصفحة الرئيسية</Link>
+            </div>
           </div>
         </div>
       </div>

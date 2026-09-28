@@ -180,6 +180,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
   const [inviteRole, setInviteRole] = useState("doctor");
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const [booking, setBooking] = useState({
     patientName: "", patientPhone: "", doctorId: doctors[0]?.id ?? "",
@@ -999,9 +1000,37 @@ export default function DashboardClient({ profile, appointments, doctors, patien
             <button className="primary" onClick={createInvite}>إنشاء رابط دعوة</button>
             {inviteError && <p className="error">{inviteError}</p>}
             {inviteCode && (
-              <p className="success-msg">
-                رابط الدعوة: <code>/invite/{inviteCode}</code> (صلاحيته 7 أيام)
-              </p>
+              <div className="success-msg" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>رابط الدعوة (صلاحيته 7 أيام):</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <a
+                    href={typeof window !== "undefined" ? `${window.location.origin}/invite/${inviteCode}` : `/invite/${inviteCode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="link"
+                    style={{ wordBreak: "break-all" }}
+                  >
+                    {typeof window !== "undefined" ? `${window.location.origin}/invite/${inviteCode}` : `/invite/${inviteCode}`}
+                  </a>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/invite/${inviteCode}`;
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        setInviteCopied(true);
+                        setTimeout(() => setInviteCopied(false), 2000);
+                      } catch {}
+                    }}
+                  >
+                    {inviteCopied ? "✔ تم النسخ" : "📋 نسخ الرابط"}
+                  </button>
+                </div>
+                <div className="subtitle" style={{ margin: 0 }}>
+                  ابعتي هالرابط كامل (مو بس الكود) للشخص المدعو عن طريق واتساب أو إيميل.
+                </div>
+              </div>
             )}
           </div>
         )}

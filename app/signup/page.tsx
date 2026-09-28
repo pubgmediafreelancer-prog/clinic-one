@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -75,6 +76,9 @@ export default function SignupPage() {
                 بعتنالك رابط تأكيد على {form.email}. افتحي الإيميل وضغطي على الرابط،
                 وبعدها رجعي سجلي دخول عادي.
               </p>
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <Link href="/" className="link">← رجوع للصفحة الرئيسية</Link>
+              </div>
             </div>
           ) : (
             <div className="card">
@@ -108,6 +112,9 @@ export default function SignupPage() {
                 {error && <p className="error">{error}</p>}
                 <button className="primary" disabled={loading}>{loading ? "..." : "إنشاء الحساب"}</button>
               </form>
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <Link href="/" className="link">← رجوع للصفحة الرئيسية</Link>
+              </div>
             </div>
           )}
         </div>

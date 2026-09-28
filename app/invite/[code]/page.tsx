@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -73,6 +74,9 @@ export default function InviteSignupPage() {
               {error && <p className="error">{error}</p>}
               <button className="primary" disabled={loading}>{loading ? "..." : "انضمام للعيادة"}</button>
             </form>
+            <div style={{ textAlign: "center", marginTop: 20 }}>
+              <Link href="/" className="link">← رجوع للصفحة الرئيسية</Link>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -79,6 +80,9 @@ export default function PortalLogin() {
                 <button className="primary" disabled={loading}>{loading ? "..." : "تأكيد"}</button>
               </form>
             )}
+            <div style={{ textAlign: "center", marginTop: 20 }}>
+              <Link href="/" className="link">← رجوع للصفحة الرئيسية</Link>
+            </div>
           </div>
         </div>
       </div>
