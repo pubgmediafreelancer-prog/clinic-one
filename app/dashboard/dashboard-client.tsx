@@ -967,7 +967,7 @@ export default function DashboardClient({ profile, appointments, doctors, patien
               يمكنك تحميل نسخة كاملة من بيانات عيادتك (المرضى، المواعيد، الفواتير، الخدمات، الموظفين) بصيغة JSON في أي وقت.
               يُنصح بأخذ نسخة احتياطية دورية وحفظها في مكان آمن خارج النظام.
             </p>
-            <button className="btn-secondary" style={{ width: "auto" }} onClick={exportClinicData}>
+            <button className="secondary" style={{ width: "auto" }} onClick={exportClinicData}>
               ⬇️ تحميل نسخة من بيانات العيادة
             </button>
           </div>
