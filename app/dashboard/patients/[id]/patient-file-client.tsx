@@ -141,9 +141,30 @@ export default function PatientFileClient({
   const [profileLoading, setProfileLoading] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
 
-  const [reportForm, setReportForm] = useState({ title: "", sharedWithPatient: true });
+  const [reportForm, setReportForm] = useState({ title: "", docType: "other", sharedWithPatient: true });
+  const [reportFile, setReportFile] = useState<File | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [docUrls, setDocUrls] = useState<Record<string, string>>({});
+  const DOC_TYPE_LABEL: Record<string, string> = {
+    lab: "تحليل مخبري", xray: "صورة أشعة (X-Ray)", ultrasound: "سونار", mri: "MRI",
+    prescription: "وصفة طبية", report: "تقرير طبي", image: "صورة", other: "أخرى",
+  };
+
+  async function getDocUrl(filePath: string) {
+    if (docUrls[filePath]) return docUrls[filePath];
+    const { data } = await supabase.storage.from("patient-documents").createSignedUrl(filePath, 3600);
+    if (data?.signedUrl) {
+      setDocUrls((prev) => ({ ...prev, [filePath]: data.signedUrl }));
+      return data.signedUrl;
+    }
+    return null;
+  }
+
+  async function openDoc(filePath: string) {
+    const url = await getDocUrl(filePath);
+    if (url) window.open(url, "_blank");
+  }
 
   const [invoiceItems, setInvoiceItems] = useState<{ description: string; quantity: string; unitPrice: string }[]>([]);
   const [invoiceCurrency, setInvoiceCurrency] = useState("USD");
@@ -239,15 +260,25 @@ export default function PatientFileClient({
     e.preventDefault();
     setReportError(null);
     setReportLoading(true);
+    let filePath: string | null = null;
+    if (reportFile) {
+      const safeName = reportFile.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      filePath = `${profile.clinic_id}/${patient.id}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("patient-documents").upload(filePath, reportFile);
+      if (uploadError) { setReportLoading(false); setReportError(uploadError.message); return; }
+    }
     const { error } = await supabase.from("reports").insert({
       clinic_id: profile.clinic_id,
       patient_id: patient.id,
       title: reportForm.title,
+      doc_type: reportForm.docType,
+      file_path: filePath,
       shared_with_patient: reportForm.sharedWithPatient,
     });
     setReportLoading(false);
     if (error) { setReportError(error.message); return; }
-    setReportForm({ title: "", sharedWithPatient: true });
+    setReportFile(null);
+    setReportForm({ title: "", docType: "other", sharedWithPatient: true });
     router.refresh();
   }
 
@@ -747,6 +778,12 @@ export default function PatientFileClient({
                 <form onSubmit={addReport}>
                   <label>عنوان المستند</label>
                   <input required value={reportForm.title} onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })} placeholder="مثال: تحليل دم، صورة أشعة، تقرير طبي..." />
+                  <label>نوع المستند</label>
+                  <select value={reportForm.docType} onChange={(e) => setReportForm({ ...reportForm, docType: e.target.value })}>
+                    {Object.entries(DOC_TYPE_LABEL).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+                  </select>
+                  <label>الملف (اختياري)</label>
+                  <input type="file" onChange={(e) => setReportFile(e.target.files?.[0] ?? null)} />
                   <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
                     <input
                       type="checkbox"
@@ -766,11 +803,19 @@ export default function PatientFileClient({
               <h2 className="section-title" style={{ marginBottom: 8 }}>المستندات والمرفقات</h2>
               {reports.length === 0 && <div className="empty-state">لا يوجد مستندات بعد</div>}
               {reports.map((r) => (
-                <div key={r.id} className="row list-item">
-                  <div style={{ fontWeight: 600 }}>{r.title}</div>
+                <div key={r.id} className="row list-item" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>{r.title}</div>
+                    <div className="subtitle" style={{ margin: 0 }}>
+                      {DOC_TYPE_LABEL[r.doc_type] ?? "أخرى"} — {new Date(r.created_at).toLocaleDateString("ar-LB")}
+                    </div>
+                  </div>
                   <span className={`badge ${r.shared_with_patient ? "badge-success" : "badge-muted"}`}>
                     {r.shared_with_patient ? "مشارك مع المريض" : "داخلي"}
                   </span>
+                  {r.file_path && (
+                    <button className="btn-sm" onClick={() => openDoc(r.file_path)}>👁 معاينة / تحميل</button>
+                  )}
                 </div>
               ))}
             </div>

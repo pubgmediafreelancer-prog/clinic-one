@@ -47,7 +47,7 @@ export default async function PatientFilePage({ params }: { params: Promise<{ id
 
   const { data: reports } = await supabase
     .from("reports")
-    .select("id, title, created_at, shared_with_patient")
+    .select("id, title, created_at, shared_with_patient, doc_type, file_path")
     .eq("patient_id", id)
     .order("created_at", { ascending: false });
 
