@@ -20,5 +20,18 @@ export default async function DentalPage() {
     .eq("clinic_id", profile.clinic_id)
     .order("full_name", { ascending: true });
 
-  return <DentalClient profile={profile as any} patients={(patients as any) ?? []} />;
+  const { data: doctors } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("clinic_id", profile.clinic_id)
+    .eq("role", "doctor")
+    .order("full_name", { ascending: true });
+
+  return (
+    <DentalClient
+      profile={profile as any}
+      patients={(patients as any) ?? []}
+      doctors={(doctors as any) ?? []}
+    />
+  );
 }
