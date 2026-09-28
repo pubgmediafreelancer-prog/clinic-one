@@ -37,6 +37,10 @@ export default function DashboardClient({ profile, appointments, doctors, patien
 
   const [specialtiesForm, setSpecialtiesForm] = useState<string[]>(activeSpecialties.filter((s) => s !== "general"));
   const [exchangeRateForm, setExchangeRateForm] = useState(String(clinic.exchange_rate ?? 89000));
+  const [clinicNameForm, setClinicNameForm] = useState((clinic as any).name ?? "");
+  const [clinicPhoneForm, setClinicPhoneForm] = useState((clinic as any).phone ?? "");
+  const [clinicAddressForm, setClinicAddressForm] = useState((clinic as any).address ?? "");
+  const [clinicEmailForm, setClinicEmailForm] = useState((clinic as any).email ?? "");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
 
@@ -50,11 +54,30 @@ export default function DashboardClient({ profile, appointments, doctors, patien
     const { error } = await supabase.from("clinics").update({
       specialties: ["general", ...specialtiesForm],
       exchange_rate: Number(exchangeRateForm) || 89000,
+      name: clinicNameForm || null,
+      phone: clinicPhoneForm || null,
+      address: clinicAddressForm || null,
+      email: clinicEmailForm || null,
     }).eq("id", clinic.id);
     setSettingsSaving(false);
     if (error) { setSettingsMsg(error.message); return; }
     setSettingsMsg("تم الحفظ بنجاح");
     router.refresh();
+  }
+
+  async function exportClinicData() {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      clinic: { id: clinic.id, name: (clinic as any).name },
+      patients, appointments, staff, invoices, services,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clinic-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
   const [serviceForm, setServiceForm] = useState({ name: "", category: "", price: "", currency: "USD" });
   const [serviceError, setServiceError] = useState<string | null>(null);
@@ -840,10 +863,19 @@ export default function DashboardClient({ profile, appointments, doctors, patien
         )}
 
         {tab === "settings" && profile.role === "admin" && (
+          <>
           <div className="card">
-            <h2 className="section-title" style={{ marginBottom: 12 }}>إعدادات العيادة</h2>
+            <h2 className="section-title" style={{ marginBottom: 12 }}>معلومات العيادة</h2>
+            <label>اسم العيادة</label>
+            <input value={clinicNameForm} onChange={(e) => setClinicNameForm(e.target.value)} />
+            <label style={{ marginTop: 12, display: "block" }}>رقم الهاتف</label>
+            <input value={clinicPhoneForm} onChange={(e) => setClinicPhoneForm(e.target.value)} />
+            <label style={{ marginTop: 12, display: "block" }}>البريد الإلكتروني</label>
+            <input type="email" value={clinicEmailForm} onChange={(e) => setClinicEmailForm(e.target.value)} />
+            <label style={{ marginTop: 12, display: "block" }}>العنوان</label>
+            <textarea rows={2} value={clinicAddressForm} onChange={(e) => setClinicAddressForm(e.target.value)} />
 
-            <label>سعر الصرف (ل.ل مقابل 1$)</label>
+            <label style={{ marginTop: 16, display: "block" }}>سعر الصرف (ل.ل مقابل 1$)</label>
             <input type="number" min="0" value={exchangeRateForm} onChange={(e) => setExchangeRateForm(e.target.value)} />
 
             <label style={{ marginTop: 16, display: "block" }}>التخصصات المفعّلة</label>
@@ -870,6 +902,32 @@ export default function DashboardClient({ profile, appointments, doctors, patien
               {settingsSaving ? "..." : "حفظ الإعدادات"}
             </button>
           </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h2 className="section-title" style={{ marginBottom: 12 }}>النسخ الاحتياطي وتصدير البيانات</h2>
+            <p className="subtitle" style={{ marginTop: 0 }}>
+              يمكنك تحميل نسخة كاملة من بيانات عيادتك (المرضى، المواعيد، الفواتير، الخدمات، الموظفين) بصيغة JSON في أي وقت.
+              يُنصح بأخذ نسخة احتياطية دورية وحفظها في مكان آمن خارج النظام.
+            </p>
+            <button className="btn-secondary" style={{ width: "auto" }} onClick={exportClinicData}>
+              ⬇️ تحميل نسخة من بيانات العيادة
+            </button>
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h2 className="section-title" style={{ marginBottom: 12 }}>الأمان وحماية البيانات</h2>
+            <ul style={{ margin: 0, paddingInlineStart: 20, lineHeight: 1.8 }}>
+              <li>بيانات كل عيادة معزولة تماماً عن باقي العيادات (Row-Level Security على مستوى قاعدة البيانات).</li>
+              <li>الصلاحيات مقسّمة حسب الدور: الإدارة، الطبيب، السكرتيرة — الأطباء والإدارة فقط يمكنهم تعديل السجل الطبي.</li>
+              <li>يتم تسجيل كل عملية حساسة (إنشاء/تعديل مريض، فاتورة، دفعة، وصفة، تغيير صلاحيات) في سجل تدقيق دائم.</li>
+              <li>الملفات والوثائق الطبية مخزّنة في مساحة خاصة محمية برابط مؤقت صالح لساعة واحدة فقط.</li>
+              <li>كلمات المرور وبيانات الدخول مُشفّرة ومُدارة بالكامل من مزود قاعدة البيانات (Supabase).</li>
+              <li style={{ color: "var(--text-muted, #6b7280)" }}>
+                ملاحظة: هذا النظام لا يُقدّم كضامن للامتثال الكامل لمعايير HIPAA أو GDPR — يرجى مراجعة الجهات المختصة قانونياً إذا كانت هذه المعايير مطلوبة لعملك.
+              </li>
+            </ul>
+          </div>
+          </>
         )}
 
         {tab === "invite" && profile.role === "admin" && (
