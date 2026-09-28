@@ -22,6 +22,7 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
   const [treatmentExtraNote, setTreatmentExtraNote] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (patientId) loadChart(patientId);
@@ -57,15 +58,18 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
   }
 
   async function setCondition(toothNum: number, condition: string) {
-    if (!chart) return;
+    if (!chart || !condition) return;
+    setError(null);
     const existing = teeth[toothNum];
     if (existing) {
-      await supabase.from("tooth_records").update({ condition }).eq("id", existing.id);
+      const { error: updateError } = await supabase.from("tooth_records").update({ condition }).eq("id", existing.id);
+      if (updateError) { setError("ما قدرنا نحدّث حالة السن، جربي كمان مرة"); return; }
       setTeeth({ ...teeth, [toothNum]: { ...existing, condition } });
     } else {
-      const { data } = await supabase.from("tooth_records").insert({
+      const { data, error: insertError } = await supabase.from("tooth_records").insert({
         chart_id: chart.id, tooth_number: String(toothNum), condition,
       }).select("id, tooth_number, condition").single();
+      if (insertError || !data) { setError("ما قدرنا نحفظ حالة السن، جربي كمان مرة"); return; }
       setTeeth({ ...teeth, [toothNum]: data });
     }
   }
@@ -152,11 +156,13 @@ export default function DentalClient({ profile, patients }: { profile: any; pati
                 <h2 className="section-title" style={{ marginBottom: 12 }}>السن رقم {selectedTooth}</h2>
                 <label>الحالة</label>
                 <select
-                  value={teeth[selectedTooth]?.condition ?? "healthy"}
+                  value={teeth[selectedTooth]?.condition ?? ""}
                   onChange={(e) => setCondition(selectedTooth, e.target.value)}
                 >
+                  <option value="" disabled>اختر الحالة</option>
                   {Object.entries(COND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
+                {error && <p className="error">{error}</p>}
 
                 <label style={{ marginTop: 12 }}>تسجيل إجراء علاجي (Add Dental Note)</label>
                 <input value={treatmentNote} onChange={(e) => setTreatmentNote(e.target.value)} placeholder="مثال: حشو تجميلي" />
